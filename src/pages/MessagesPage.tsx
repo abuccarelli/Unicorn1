@@ -1,0 +1,57 @@
+import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useConversations } from '../hooks/useConversations';
+import { useMessages } from '../hooks/useMessages';
+import { ConversationList } from '../components/messaging/ConversationList';
+import { ChatInterface } from '../components/messaging/ChatInterface';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+
+export function MessagesPage() {
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const { conversations, loading: conversationsLoading, error: conversationsError } = useConversations();
+  const [selectedId, setSelectedId] = useState<string>(conversationId || '');
+  
+  const {
+    messages,
+    loading: messagesLoading,
+    error: messagesError,
+    sendMessage
+  } = useMessages(selectedId);
+
+  const selectedConversation = conversations.find(c => c.id === selectedId);
+
+  if (conversationsLoading) return <LoadingSpinner />;
+  if (conversationsError) return <div className="text-red-600">{conversationsError}</div>;
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Messages</h1>
+      
+      <div className="bg-white rounded-lg shadow-sm min-h-[600px] flex">
+        {/* Conversations Sidebar */}
+        <div className="w-1/3 border-r border-gray-200">
+          <ConversationList
+            conversations={conversations}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
+
+        {/* Chat Area */}
+        <div className="w-2/3">
+          {selectedId && selectedConversation ? (
+            <ChatInterface
+              messages={messages}
+              onSendMessage={sendMessage}
+              otherPartyName={selectedConversation.otherPartyName}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              Select a conversation to start messaging
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

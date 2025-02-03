@@ -30,15 +30,20 @@ export function AuthForm({ mode, onClose }: AuthFormProps) {
         });
         if (error) throw error;
         toast.success('Registration successful! Please check your email.');
-        onClose(); // Close modal after successful signup
+        onClose();
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) throw error;
+        if (error) {
+          if (error.message === 'Invalid login credentials') {
+            throw new Error('Incorrect email or password. Please try again.');
+          }
+          throw error;
+        }
         toast.success('Successfully signed in!');
-        onClose(); // Close modal after successful signin
+        onClose();
       }
     } catch (error) {
       toast.error(error.message);
@@ -60,6 +65,7 @@ export function AuthForm({ mode, onClose }: AuthFormProps) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          placeholder="Enter your email address"
         />
       </div>
 
@@ -74,7 +80,14 @@ export function AuthForm({ mode, onClose }: AuthFormProps) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          placeholder={mode === 'signup' ? 'Choose a password' : 'Enter your password'}
+          minLength={6}
         />
+        {mode === 'signup' && (
+          <p className="mt-1 text-sm text-gray-500">
+            Password must be at least 6 characters long
+          </p>
+        )}
       </div>
 
       {mode === 'signup' && (
@@ -112,7 +125,7 @@ export function AuthForm({ mode, onClose }: AuthFormProps) {
         disabled={loading}
         className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
       >
-        {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
+        {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
       </button>
     </form>
   );

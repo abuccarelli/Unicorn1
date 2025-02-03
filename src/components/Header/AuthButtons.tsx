@@ -41,7 +41,7 @@ export function AuthButtons() {
 
   return (
     <>
-      <div className="hidden sm:flex sm:items-center sm:space-x-4">
+      <div className="flex items-center space-x-4">
         <button
           onClick={() => handleAuthClick('signin')}
           className="text-gray-600 hover:text-gray-900"
