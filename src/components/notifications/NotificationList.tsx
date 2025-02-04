@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, Loader2 } from 'lucide-react';
+import { Bell, Check, Loader2, MessageSquare, Calendar, AlertTriangle } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { formatRelativeTime } from '../../utils/dateTime';
+import type { NotificationType } from '../../types/notification';
 
 interface NotificationListProps {
   onClose: () => void;
@@ -11,6 +12,40 @@ interface NotificationListProps {
 export function NotificationList({ onClose }: NotificationListProps) {
   const navigate = useNavigate();
   const { notifications, loading, error, markAsRead, markAllAsRead } = useNotifications();
+
+  const getNotificationIcon = (type: NotificationType) => {
+    switch (type) {
+      case 'message':
+        return <MessageSquare className="h-5 w-5 text-blue-500" />;
+      case 'booking_approved':
+        return <Check className="h-5 w-5 text-green-500" />;
+      case 'booking_rejected':
+      case 'booking_cancelled':
+        return <AlertTriangle className="h-5 w-5 text-red-500" />;
+      case 'booking_rescheduled':
+        return <Calendar className="h-5 w-5 text-orange-500" />;
+      default:
+        return <Bell className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
+  const getNotificationColor = (type: NotificationType) => {
+    switch (type) {
+      case 'message':
+        return 'bg-blue-50';
+      case 'booking_approved':
+        return 'bg-green-50';
+      case 'booking_rejected':
+      case 'booking_cancelled':
+        return 'bg-red-50';
+      case 'booking_rescheduled':
+        return 'bg-orange-50';
+      case 'system_alert':
+        return 'bg-yellow-50';
+      default:
+        return 'bg-gray-50';
+    }
+  };
 
   if (loading) {
     return (
@@ -67,9 +102,12 @@ export function NotificationList({ onClose }: NotificationListProps) {
               onClick={() => handleClick(notification.id, notification.link)}
               className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${
                 notification.read ? 'opacity-75' : ''
-              }`}
+              } ${getNotificationColor(notification.type)}`}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 mt-1">
+                  {getNotificationIcon(notification.type)}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium ${notification.read ? 'text-gray-900' : 'text-indigo-600'}`}>
                     {notification.title}

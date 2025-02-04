@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuthContext } from '../context/AuthContext';
 import type { Notification, NotificationCount } from '../types/notification';
+import { DateTime } from 'luxon';
 
 export function useNotifications() {
   const { user } = useAuthContext();
@@ -10,6 +11,20 @@ export function useNotifications() {
   const [counts, setCounts] = useState<NotificationCount>({ total: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const validateDate = (dateStr: string): string => {
+    try {
+      const dt = DateTime.fromISO(dateStr, { zone: 'UTC' });
+      if (!dt.isValid) {
+        console.error('Invalid date detected:', dateStr);
+        return 'Invalid date';
+      }
+      return dt.toISO();
+    } catch (error) {
+      console.error('Date validation error:', error);
+      return 'Invalid date';
+    }
+  };
 
   const fetchNotifications = async () => {
     if (!user) {
@@ -29,14 +44,13 @@ export function useNotifications() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (fetchError) {
-        if (fetchError.message?.includes('Failed to fetch')) {
-          throw new Error('Unable to connect to the server. Please check your internet connection.');
-        }
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
-      const notificationData = data || [];
+      const notificationData = (data || []).map(notification => ({
+        ...notification,
+        createdAt: validateDate(notification.created_at)
+      }));
+
       setNotifications(notificationData);
       setCounts({
         total: notificationData.length,
@@ -45,10 +59,7 @@ export function useNotifications() {
     } catch (err) {
       console.error('Error loading notifications:', err);
       setError(err instanceof Error ? err.message : 'Failed to load notifications');
-      // Only show toast for non-connection errors
-      if (!(err instanceof Error) || !err.message.includes('internet connection')) {
-        toast.error('Failed to load notifications. Please try again later.');
-      }
+      toast.error('Failed to load notifications');
     } finally {
       setLoading(false);
     }
@@ -57,10 +68,8 @@ export function useNotifications() {
   useEffect(() => {
     fetchNotifications();
 
-    // Set up real-time subscription for notifications
     if (user) {
-      const channel = supabase
-        .channel(`user_notifications:${user.id}`)
+      const channel = supabase.channel(`user_notifications:${user.id}`)
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
@@ -68,20 +77,8 @@ export function useNotifications() {
           filter: `user_id=eq.${user.id}`
         }, () => {
           fetchNotifications();
-        });
-
-      // Subscribe with proper error handling
-      channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to notifications');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Failed to subscribe to notifications channel');
-          // Retry subscription after a delay
-          setTimeout(() => {
-            channel.subscribe();
-          }, 5000);
-        }
-      });
+        })
+        .subscribe();
 
       return () => {
         channel.unsubscribe();

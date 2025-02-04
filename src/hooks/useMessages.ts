@@ -11,12 +11,45 @@ export function useMessages(conversationId: string) {
   const [error, setError] = useState<string | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const channelRef = useRef<any>(null);
+  const typingChannelRef = useRef<any>(null);
+  const mounted = useRef(true);
 
+  // Cleanup function
+  const cleanupSubscriptions = async () => {
+    try {
+      if (channelRef.current) {
+        await channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+      if (typingChannelRef.current) {
+        await typingChannelRef.current.unsubscribe();
+        typingChannelRef.current = null;
+      }
+    } catch (err) {
+      console.error('Error cleaning up subscriptions:', err);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      cleanupSubscriptions();
+    };
+  }, []);
+
+  // Main effect for messages and subscriptions
   useEffect(() => {
     if (!user || !conversationId) return;
 
     const fetchMessages = async () => {
       try {
+        setLoading(true);
         const { data: messagesData, error: messagesError } = await supabase
           .from('messages')
           .select(`
@@ -34,7 +67,9 @@ export function useMessages(conversationId: string) {
           .order('created_at', { ascending: true });
 
         if (messagesError) throw messagesError;
-        setMessages(messagesData);
+        if (mounted.current) {
+          setMessages(messagesData || []);
+        }
 
         // Mark messages as read
         const unreadMessages = messagesData?.filter(
@@ -49,77 +84,98 @@ export function useMessages(conversationId: string) {
         }
       } catch (err) {
         console.error('Error fetching messages:', err);
-        setError('Failed to load messages');
+        if (mounted.current) {
+          setError('Failed to load messages');
+        }
       } finally {
-        setLoading(false);
+        if (mounted.current) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchMessages();
+    const setupSubscriptions = async () => {
+      try {
+        // Clean up existing subscriptions first
+        await cleanupSubscriptions();
 
-    // Subscribe to new messages
-    const channel = supabase.channel(`messages:${conversationId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `conversation_id=eq.${conversationId}`
-      }, async payload => {
-        const newMessage = payload.new as Message;
-        
-        // Fetch attachments for the new message
-        const { data: attachments } = await supabase
-          .from('message_attachments')
-          .select('*')
-          .eq('message_id', newMessage.id);
+        // Create message channel
+        const messageChannel = supabase.channel(`messages:${conversationId}`);
+        channelRef.current = messageChannel;
 
-        setMessages(current => [...current, {
-          ...newMessage,
-          message_attachments: attachments
-        }]);
-        
-        // Mark message as read if received
-        if (newMessage.sender_id !== user.id) {
-          await supabase
-            .from('messages')
-            .update({ read_at: new Date().toISOString() })
-            .eq('id', newMessage.id);
-        }
-      })
-      .subscribe();
+        messageChannel.on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        }, async payload => {
+          if (!mounted.current) return;
+          
+          const newMessage = payload.new as Message;
+          
+          // Fetch attachments for the new message
+          const { data: attachments } = await supabase
+            .from('message_attachments')
+            .select('*')
+            .eq('message_id', newMessage.id);
 
-    // Subscribe to typing indicators
-    const typingChannel = supabase.channel(`typing:${conversationId}`)
-      .on('presence', { event: 'sync' }, () => {
-        const state = typingChannel.presenceState();
-        const typingUsers = Object.values(state).flat() as any[];
-        const otherTypingUser = typingUsers.find(u => u.user_id !== user.id);
-        setTypingUser(otherTypingUser?.name || null);
-      })
-      .subscribe();
+          setMessages(current => [...current, {
+            ...newMessage,
+            message_attachments: attachments
+          }]);
+          
+          // Mark message as read if received
+          if (newMessage.sender_id !== user.id) {
+            await supabase
+              .from('messages')
+              .update({ read_at: new Date().toISOString() })
+              .eq('id', newMessage.id);
+          }
+        });
 
-    return () => {
-      channel.unsubscribe();
-      typingChannel.unsubscribe();
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+        // Create typing channel
+        const typingChannel = supabase.channel(`typing:${conversationId}`);
+        typingChannelRef.current = typingChannel;
+
+        typingChannel.on('presence', { event: 'sync' }, () => {
+          if (!mounted.current) return;
+          const state = typingChannel.presenceState();
+          const typingUsers = Object.values(state).flat() as any[];
+          const otherTypingUser = typingUsers.find(u => u.user_id !== user.id);
+          setTypingUser(otherTypingUser?.name || null);
+        });
+
+        // Subscribe to channels
+        await messageChannel.subscribe();
+        await typingChannel.subscribe();
+
+      } catch (err) {
+        console.error('Error setting up subscriptions:', err);
+        toast.error('Connection error. Messages may be delayed.');
       }
+    };
+
+    // Initial setup
+    fetchMessages();
+    setupSubscriptions();
+
+    // Cleanup when conversation changes
+    return () => {
+      cleanupSubscriptions();
     };
   }, [user, conversationId]);
 
   const setTyping = async (isTyping: boolean) => {
-    if (!user || !conversationId) return;
+    if (!user || !conversationId || !typingChannelRef.current) return;
 
     try {
-      const channel = supabase.channel(`typing:${conversationId}`);
-      
       if (isTyping) {
-        await channel.track({
+        await typingChannelRef.current.track({
           user_id: user.id,
           name: `${user.user_metadata.firstName} ${user.user_metadata.lastName}`
         });
       } else {
-        await channel.untrack();
+        await typingChannelRef.current.untrack();
       }
     } catch (error) {
       console.error('Error updating typing status:', error);
@@ -129,7 +185,6 @@ export function useMessages(conversationId: string) {
   const sendMessage = async (content: string, attachments?: File[]) => {
     if (!user) return;
     
-    // Validate that either content or attachments are present
     const hasContent = content.trim().length > 0;
     const hasAttachments = attachments && attachments.length > 0;
     
@@ -139,20 +194,51 @@ export function useMessages(conversationId: string) {
     }
 
     try {
-      const { data: conversation } = await supabase
+      const messageContent = content.trim() || 'Sent attachments';
+      const now = new Date().toISOString();
+
+      // Create optimistic message
+      const optimisticMessage: Message = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: messageContent,
+        created_at: now,
+        message_attachments: []
+      };
+
+      // Add optimistic message to UI
+      setMessages(current => [...current, optimisticMessage]);
+
+      // Get conversation details
+      const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .select('student_id, teacher_id')
         .eq('id', conversationId)
         .single();
 
-      if (!conversation) throw new Error('Conversation not found');
+      if (convError) throw convError;
 
-      // Upload attachments first if any
-      const uploadedAttachments = [];
+      // Insert message
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          content: messageContent,
+          created_at: now
+        })
+        .select()
+        .single();
+
+      if (messageError) throw messageError;
+
+      // Handle attachments if any
+      let messageAttachments = [];
       if (hasAttachments) {
-        for (const file of attachments!) {
+        const attachmentPromises = attachments!.map(async file => {
           const fileExt = file.name.split('.').pop();
-          const filePath = `${conversationId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const filePath = `${conversationId}/${message.id}-${Date.now()}.${fileExt}`;
           
           const { error: uploadError } = await supabase.storage
             .from('message-attachments')
@@ -160,68 +246,62 @@ export function useMessages(conversationId: string) {
 
           if (uploadError) throw uploadError;
 
-          uploadedAttachments.push({
-            file_name: file.name,
-            file_size: file.size,
-            file_type: file.type,
-            file_path: filePath
-          });
-        }
-      }
-
-      // Create message content
-      let messageContent = content.trim();
-      if (!hasContent && hasAttachments) {
-        // Create a list of file names for the message content
-        const fileNames = attachments!.map(file => file.name).join(', ');
-        messageContent = `📎 ${fileNames}`;
-      }
-      
-      const { data: message, error: messageError } = await supabase
-        .from('messages')
-        .insert([{
-          conversation_id: conversationId,
-          sender_id: user.id,
-          content: messageContent,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-
-      if (messageError) throw messageError;
-
-      // Insert attachments metadata if any
-      if (uploadedAttachments.length > 0) {
-        const { error: attachmentError } = await supabase
-          .from('message_attachments')
-          .insert(
-            uploadedAttachments.map(attachment => ({
+          const { data: attachment } = await supabase
+            .from('message_attachments')
+            .insert({
               message_id: message.id,
-              ...attachment
-            }))
-          );
+              file_name: file.name,
+              file_size: file.size,
+              file_type: file.type,
+              file_path: filePath
+            })
+            .select()
+            .single();
 
-        if (attachmentError) throw attachmentError;
+          return attachment;
+        });
+
+        messageAttachments = await Promise.all(attachmentPromises);
       }
 
-      // Create notification for the recipient
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+          updated_at: now,
+          last_message: messageContent
+        })
+        .eq('id', conversationId);
+
+      // Create notification
       const recipientId = user.id === conversation.student_id 
         ? conversation.teacher_id 
         : conversation.student_id;
 
       await supabase
         .from('notifications')
-        .insert([{
+        .insert({
           user_id: recipientId,
           type: 'message',
           title: 'New Message',
           content: `You have a new message`,
           link: `/messages/${conversationId}`,
           read: false
-        }]);
+        });
+
+      // Update messages with real message and attachments
+      setMessages(current => 
+        current.map(m => 
+          m.id === optimisticMessage.id 
+            ? { ...message, message_attachments: messageAttachments }
+            : m
+        )
+      );
 
     } catch (err) {
       console.error('Error sending message:', err);
+      // Remove optimistic message on error
+      setMessages(current => current.filter(m => !m.id.startsWith('temp-')));
       toast.error('Failed to send message');
       throw err;
     }

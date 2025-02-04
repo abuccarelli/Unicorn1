@@ -8,14 +8,16 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function MessagesPage() {
   const { conversationId } = useParams<{ conversationId?: string }>();
-  const { conversations, loading: conversationsLoading, error: conversationsError } = useConversations();
   const [selectedId, setSelectedId] = useState<string>(conversationId || '');
+  const { conversations, loading: conversationsLoading, error: conversationsError } = useConversations();
   
   const {
     messages,
     loading: messagesLoading,
     error: messagesError,
-    sendMessage
+    sendMessage,
+    typingUser,
+    setTyping
   } = useMessages(selectedId);
 
   const selectedConversation = conversations.find(c => c.id === selectedId);
@@ -25,8 +27,6 @@ export function MessagesPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Messages</h1>
-      
       <div className="bg-white rounded-lg shadow-sm min-h-[600px] flex">
         {/* Conversations Sidebar */}
         <div className="w-1/3 border-r border-gray-200">
@@ -44,10 +44,17 @@ export function MessagesPage() {
               messages={messages}
               onSendMessage={sendMessage}
               otherPartyName={selectedConversation.otherPartyName}
+              otherPartyId={selectedConversation.otherPartyId}
+              conversationId={selectedId}
+              typingUser={typingUser}
+              onTyping={setTyping}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Select a conversation to start messaging
+            <div className="flex items-center justify-center h-full text-gray-500 bg-gray-50">
+              <div className="text-center">
+                <p className="text-lg mb-2">Welcome to Messages</p>
+                <p className="text-sm">Select a conversation to start chatting</p>
+              </div>
             </div>
           )}
         </div>

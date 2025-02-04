@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 interface MessageInputProps {
   onSend: (content: string, attachments?: File[]) => Promise<void>;
   conversationId: string;
-  onTyping: (isTyping: boolean) => void;
+  onTyping?: (isTyping: boolean) => void;
 }
 
 export function MessageInput({ onSend, conversationId, onTyping }: MessageInputProps) {
@@ -25,13 +25,15 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
   }, [message]);
 
   const handleTyping = () => {
-    onTyping(true);
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+    if (onTyping) {
+      onTyping(true);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false);
+      }, 3000);
     }
-    typingTimeoutRef.current = setTimeout(() => {
-      onTyping(false);
-    }, 3000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
