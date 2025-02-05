@@ -14,21 +14,6 @@ export function useNotifications() {
   const channelRef = useRef<any>(null);
   const mounted = useRef(true);
 
-  // Validate date helper
-  const validateDate = useCallback((dateStr: string): string => {
-    try {
-      const dt = DateTime.fromISO(dateStr, { zone: 'UTC' });
-      if (!dt.isValid) {
-        console.error('Invalid date detected:', dateStr);
-        return DateTime.now().toISO()!;
-      }
-      return dt.toISO()!;
-    } catch (error) {
-      console.error('Date validation error:', error);
-      return DateTime.now().toISO()!;
-    }
-  }, []);
-
   // Fetch notifications handler
   const fetchNotifications = useCallback(async () => {
     if (!user) {
@@ -39,9 +24,7 @@ export function useNotifications() {
     }
 
     try {
-      setLoading(true);
-      setError(null);
-
+      console.log('Fetching notifications for user:', user.id);
       const { data, error: fetchError } = await supabase
         .from('notifications')
         .select('*')
@@ -50,9 +33,26 @@ export function useNotifications() {
 
       if (fetchError) throw fetchError;
 
-      const notificationData = (data || []).map(notification => ({
+      // Deduplicate notifications by content and created_at within a 1-second window
+      const deduplicatedData = data?.reduce((acc, notification) => {
+        const isDuplicate = acc.some(n => 
+          n.content === notification.content &&
+          n.type === notification.type &&
+          Math.abs(
+            DateTime.fromISO(n.created_at).toMillis() - 
+            DateTime.fromISO(notification.created_at).toMillis()
+          ) < 1000 // 1 second window
+        );
+
+        if (!isDuplicate) {
+          acc.push(notification);
+        }
+        return acc;
+      }, [] as any[]) || [];
+
+      const notificationData = deduplicatedData.map(notification => ({
         ...notification,
-        createdAt: validateDate(notification.created_at)
+        createdAt: notification.created_at
       }));
 
       if (mounted.current) {
@@ -61,63 +61,60 @@ export function useNotifications() {
           total: notificationData.length,
           unread: notificationData.filter(n => !n.read).length
         });
+        setError(null);
       }
     } catch (err) {
       console.error('Error loading notifications:', err);
       if (mounted.current) {
-        setError(err instanceof Error ? err.message : 'Failed to load notifications');
-        toast.error('Failed to load notifications');
+        setError('Failed to load notifications');
       }
     } finally {
       if (mounted.current) {
         setLoading(false);
       }
     }
-  }, [user, validateDate]);
+  }, [user]);
 
-  // Setup real-time subscription
+  // Setup subscription
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setNotifications([]);
+      setCounts({ total: 0, unread: 0 });
+      setLoading(false);
+      return;
+    }
 
-    const setupSubscription = async () => {
-      try {
-        // Clean up existing subscription
-        if (channelRef.current) {
-          await channelRef.current.unsubscribe();
+    console.log('Setting up notifications subscription');
+    setLoading(true);
+
+    const channel = supabase.channel(`notifications:${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        console.log('Notification change detected, refreshing...');
+        // Add a small delay to ensure all notifications are created
+        setTimeout(fetchNotifications, 100);
+      })
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          fetchNotifications();
         }
+      });
 
-        const channel = supabase.channel(`user_notifications:${user.id}`)
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`
-          }, () => {
-            if (mounted.current) {
-              fetchNotifications();
-            }
-          });
-
-        channelRef.current = channel;
-        await channel.subscribe();
-      } catch (error) {
-        console.error('Subscription error:', error);
-        toast.error('Failed to subscribe to notifications');
-      }
-    };
-
-    setupSubscription();
-    fetchNotifications();
+    channelRef.current = channel;
 
     return () => {
-      mounted.current = false;
+      console.log('Cleaning up notifications subscription');
       if (channelRef.current) {
         channelRef.current.unsubscribe();
       }
     };
   }, [user, fetchNotifications]);
 
-  // Mark as read handler
   const markAsRead = useCallback(async (id: string) => {
     if (!user) return;
 
@@ -144,7 +141,6 @@ export function useNotifications() {
     }
   }, [user]);
 
-  // Mark all as read handler
   const markAllAsRead = useCallback(async () => {
     if (!user) return;
 
