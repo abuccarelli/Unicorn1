@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Loader2, MessageSquare, Calendar, AlertTriangle } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -9,43 +9,65 @@ interface NotificationListProps {
   onClose: () => void;
 }
 
-export function NotificationList({ onClose }: NotificationListProps) {
+// Memoize notification icon mapping
+const getNotificationIcon = (type: NotificationType) => {
+  switch (type) {
+    case 'message':
+      return <MessageSquare className="h-5 w-5 text-blue-500" />;
+    case 'booking_approved':
+      return <Check className="h-5 w-5 text-green-500" />;
+    case 'booking_rejected':
+    case 'booking_cancelled':
+      return <AlertTriangle className="h-5 w-5 text-red-500" />;
+    case 'booking_rescheduled':
+      return <Calendar className="h-5 w-5 text-orange-500" />;
+    default:
+      return <Bell className="h-5 w-5 text-gray-500" />;
+  }
+};
+
+// Memoize notification color mapping
+const getNotificationColor = (type: NotificationType) => {
+  switch (type) {
+    case 'message':
+      return 'bg-blue-50';
+    case 'booking_approved':
+      return 'bg-green-50';
+    case 'booking_rejected':
+    case 'booking_cancelled':
+      return 'bg-red-50';
+    case 'booking_rescheduled':
+      return 'bg-orange-50';
+    case 'system_alert':
+      return 'bg-yellow-50';
+    default:
+      return 'bg-gray-50';
+  }
+};
+
+export const NotificationList = React.memo(({ onClose }: NotificationListProps) => {
   const navigate = useNavigate();
   const { notifications, loading, error, markAsRead, markAllAsRead } = useNotifications();
 
-  const getNotificationIcon = (type: NotificationType) => {
-    switch (type) {
-      case 'message':
-        return <MessageSquare className="h-5 w-5 text-blue-500" />;
-      case 'booking_approved':
-        return <Check className="h-5 w-5 text-green-500" />;
-      case 'booking_rejected':
-      case 'booking_cancelled':
-        return <AlertTriangle className="h-5 w-5 text-red-500" />;
-      case 'booking_rescheduled':
-        return <Calendar className="h-5 w-5 text-orange-500" />;
-      default:
-        return <Bell className="h-5 w-5 text-gray-500" />;
-    }
-  };
+  // Memoize handlers
+  const handleMarkAllAsRead = useCallback(async () => {
+    await markAllAsRead();
+  }, [markAllAsRead]);
 
-  const getNotificationColor = (type: NotificationType) => {
-    switch (type) {
-      case 'message':
-        return 'bg-blue-50';
-      case 'booking_approved':
-        return 'bg-green-50';
-      case 'booking_rejected':
-      case 'booking_cancelled':
-        return 'bg-red-50';
-      case 'booking_rescheduled':
-        return 'bg-orange-50';
-      case 'system_alert':
-        return 'bg-yellow-50';
-      default:
-        return 'bg-gray-50';
+  const handleClick = useCallback(async (id: string, link?: string) => {
+    await markAsRead(id);
+    onClose();
+    if (link) {
+      navigate(link);
     }
-  };
+  }, [markAsRead, onClose, navigate]);
+
+  // Memoize sorted notifications
+  const sortedNotifications = useMemo(() => {
+    return [...notifications].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [notifications]);
 
   if (loading) {
     return (
@@ -64,14 +86,6 @@ export function NotificationList({ onClose }: NotificationListProps) {
     );
   }
 
-  const handleClick = async (id: string, link?: string) => {
-    await markAsRead(id);
-    onClose();
-    if (link) {
-      navigate(link);
-    }
-  };
-
   return (
     <div className="divide-y divide-gray-100">
       <div className="p-4 bg-gray-50">
@@ -79,7 +93,7 @@ export function NotificationList({ onClose }: NotificationListProps) {
           <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
           {notifications.length > 0 && (
             <button
-              onClick={markAllAsRead}
+              onClick={handleMarkAllAsRead}
               className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center"
             >
               <Check className="h-4 w-4 mr-1" />
@@ -96,7 +110,7 @@ export function NotificationList({ onClose }: NotificationListProps) {
         </div>
       ) : (
         <div className="max-h-[60vh] overflow-y-auto">
-          {notifications.map((notification) => (
+          {sortedNotifications.map((notification) => (
             <button
               key={notification.id}
               onClick={() => handleClick(notification.id, notification.link)}
@@ -129,4 +143,6 @@ export function NotificationList({ onClose }: NotificationListProps) {
       )}
     </div>
   );
-}
+});
+
+NotificationList.displayName = 'NotificationList';

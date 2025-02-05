@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthContext } from '../context/AuthContext';
 
@@ -18,38 +18,40 @@ export function usePresence(userId?: string) {
   const { user } = useAuthContext();
   const [status, setStatus] = useState<PresenceStatus>('offline');
   const [presenceMap, setPresenceMap] = useState<Record<string, UserPresence>>({});
+  const channelRef = useRef<any>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout>();
+  const mounted = useRef(true);
 
+  // Cleanup function
+  const cleanup = useCallback(async () => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+    }
+    if (channelRef.current) {
+      try {
+        await channelRef.current.untrack();
+        await channelRef.current.unsubscribe();
+      } catch (error) {
+        console.error('Cleanup error:', error);
+      }
+    }
+  }, []);
+
+  // Initialize presence
   useEffect(() => {
-    let mounted = true;
-    let channel: any = null;
-    let heartbeatInterval: NodeJS.Timeout;
-
-    const cleanup = async () => {
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
-      }
-      if (channel) {
-        try {
-          await channel.untrack();
-          await channel.unsubscribe();
-        } catch (error) {
-          console.error('Cleanup error:', error);
-        }
-      }
-    };
+    if (!user?.id) return;
 
     const initPresence = async () => {
-      if (!user?.id || !mounted) return;
-
       // Clean up any existing channel first
       await cleanup();
 
       try {
-        channel = supabase.channel(PRESENCE_CHANNEL);
+        const channel = supabase.channel(PRESENCE_CHANNEL);
+        channelRef.current = channel;
 
         channel
           .on('presence', { event: 'sync' }, () => {
-            if (!mounted) return;
+            if (!mounted.current) return;
             const state = channel.presenceState();
             const now = Date.now();
             const newPresenceMap: Record<string, UserPresence> = {};
@@ -69,12 +71,12 @@ export function usePresence(userId?: string) {
             setPresenceMap(newPresenceMap);
           })
           .on('presence', { event: 'join' }, ({ newPresence }: any) => {
-            if (!mounted || !Array.isArray(newPresence) || !newPresence.length) return;
+            if (!mounted.current || !Array.isArray(newPresence) || !newPresence.length) return;
             const presence = newPresence[0] as UserPresence;
             setPresenceMap(prev => ({ ...prev, [presence.user_id]: presence }));
           })
           .on('presence', { event: 'leave' }, ({ leftPresence }: any) => {
-            if (!mounted || !Array.isArray(leftPresence) || !leftPresence.length) return;
+            if (!mounted.current || !Array.isArray(leftPresence) || !leftPresence.length) return;
             const presence = leftPresence[0] as UserPresence;
             setPresenceMap(prev => {
               const newMap = { ...prev };
@@ -92,26 +94,31 @@ export function usePresence(userId?: string) {
           last_seen: new Date().toISOString()
         });
 
-        if (mounted) {
+        if (mounted.current) {
           setStatus('online');
         }
 
-        // Set up heartbeat
-        heartbeatInterval = setInterval(async () => {
-          if (!mounted) return;
-          try {
-            await channel.track({
-              user_id: user.id,
-              status: status === 'busy' ? 'busy' : 'online',
-              last_seen: new Date().toISOString()
-            });
-          } catch (error) {
-            console.error('Heartbeat error:', error);
-          }
+        // Set up heartbeat with debouncing
+        let heartbeatTimeout: NodeJS.Timeout;
+        heartbeatIntervalRef.current = setInterval(async () => {
+          if (!mounted.current) return;
+          clearTimeout(heartbeatTimeout);
+          heartbeatTimeout = setTimeout(async () => {
+            try {
+              await channel.track({
+                user_id: user.id,
+                status: status === 'busy' ? 'busy' : 'online',
+                last_seen: new Date().toISOString()
+              });
+            } catch (error) {
+              console.error('Heartbeat error:', error);
+            }
+          }, 100); // Debounce heartbeats
         }, HEARTBEAT_INTERVAL);
+
       } catch (error) {
         console.error('Presence error:', error);
-        if (mounted) {
+        if (mounted.current) {
           setStatus('offline');
         }
       }
@@ -120,17 +127,17 @@ export function usePresence(userId?: string) {
     initPresence();
 
     return () => {
-      mounted = false;
+      mounted.current = false;
       cleanup();
     };
-  }, [user]);
+  }, [user, cleanup]);
 
+  // Update status handler
   const updateStatus = useCallback(async (newStatus: PresenceStatus) => {
-    if (!user?.id) return;
+    if (!user?.id || !channelRef.current) return;
     
     try {
-      const channel = supabase.channel(PRESENCE_CHANNEL);
-      await channel.track({
+      await channelRef.current.track({
         user_id: user.id,
         status: newStatus,
         last_seen: new Date().toISOString()
@@ -141,6 +148,7 @@ export function usePresence(userId?: string) {
     }
   }, [user]);
 
+  // Get user status with caching
   const getUserStatus = useCallback((targetUserId?: string): PresenceStatus => {
     if (!targetUserId) return status;
     

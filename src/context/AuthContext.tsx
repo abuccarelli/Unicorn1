@@ -23,6 +23,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
       } catch (error) {
         console.error('Auth initialization error:', error);
+        if (error.message?.includes('refresh_token_not_found')) {
+          // Clear any stale auth state
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -34,11 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        // Ensure all presence channels are cleaned up
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        // Clean up all presence channels
         const channels = supabase.getChannels();
         await Promise.all(channels.map(channel => channel.unsubscribe()));
-        setUser(null);
+        setUser(session?.user ?? null);
       } else {
         setUser(session?.user ?? null);
       }

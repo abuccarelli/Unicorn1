@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Paperclip, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../../lib/supabase';
 
 interface MessageInputProps {
   onSend: (content: string, attachments?: File[]) => Promise<void>;
@@ -9,7 +8,12 @@ interface MessageInputProps {
   onTyping?: (isTyping: boolean) => void;
 }
 
-export function MessageInput({ onSend, conversationId, onTyping }: MessageInputProps) {
+// Memoized icon components
+const SendIcon = React.memo(() => <Send className="h-5 w-5" />);
+const AttachIcon = React.memo(() => <Paperclip className="h-5 w-5" />);
+const LoadingIcon = React.memo(() => <Loader2 className="h-5 w-5 animate-spin" />);
+
+export const MessageInput = React.memo(({ onSend, conversationId, onTyping }: MessageInputProps) => {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -17,6 +21,7 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -24,7 +29,8 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
     }
   }, [message]);
 
-  const handleTyping = () => {
+  // Handle typing indicator
+  const handleTyping = useCallback(() => {
     if (onTyping) {
       onTyping(true);
       if (typingTimeoutRef.current) {
@@ -34,8 +40,9 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
         onTyping(false);
       }, 3000);
     }
-  };
+  }, [onTyping]);
 
+  // Handle message submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!message.trim() && attachments.length === 0) || sending) return;
@@ -55,18 +62,12 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
-  const handleFileSelect = () => {
+  // Handle file selection
+  const handleFileSelect = useCallback(() => {
     fileInputRef.current?.click();
-  };
+  }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const validFiles = files.filter(file => file.size <= 10 * 1024 * 1024); // 10MB limit
     
@@ -78,11 +79,11 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
-  const removeAttachment = (index: number) => {
+  const removeAttachment = useCallback((index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
   return (
     <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 bg-white">
@@ -112,7 +113,12 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
               setMessage(e.target.value);
               handleTyping();
             }}
-            onKeyPress={handleKeyPress}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
             placeholder="Type a message..."
             className="w-full resize-none rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-h-[40px] max-h-[120px] py-2 px-3"
             disabled={sending}
@@ -126,7 +132,7 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
           className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 h-10"
           disabled={sending}
         >
-          <Paperclip className="h-5 w-5" />
+          <AttachIcon />
         </button>
 
         <button
@@ -134,11 +140,7 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
           disabled={(!message.trim() && attachments.length === 0) || sending}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 h-10"
         >
-          {sending ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send className="h-5 w-5" />
-          )}
+          {sending ? <LoadingIcon /> : <SendIcon />}
         </button>
       </div>
 
@@ -152,4 +154,6 @@ export function MessageInput({ onSend, conversationId, onTyping }: MessageInputP
       />
     </form>
   );
-}
+});
+
+MessageInput.displayName = 'MessageInput';

@@ -1,65 +1,76 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { Layout } from '../components/Layout';
-import { HomePage } from '../pages/HomePage';
-import { ProfilePage } from '../pages/ProfilePage';
-import { TeacherDirectory } from '../pages/TeacherDirectory';
-import { TeacherProfile } from '../pages/TeacherProfile';
-import { TeacherDashboard } from '../pages/TeacherDashboard';
-import { StudentDashboard } from '../pages/StudentDashboard';
-import { StudentRequests } from '../pages/teacher/StudentRequests';
-import { MyBookings } from '../pages/student/MyBookings';
-import { MessagesPage } from '../pages/MessagesPage';
-import { Unauthorized } from '../pages/Unauthorized';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ProtectedRoute } from '../components/ProtectedRoute';
+
+// Lazy load route components
+const HomePage = lazy(() => import('../pages/HomePage').then(m => ({ default: m.HomePage })));
+const ProfilePage = lazy(() => import('../pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const TeacherDirectory = lazy(() => import('../pages/TeacherDirectory').then(m => ({ default: m.TeacherDirectory })));
+const TeacherProfile = lazy(() => import('../pages/TeacherProfile').then(m => ({ default: m.TeacherProfile })));
+const TeacherDashboard = lazy(() => import('../pages/TeacherDashboard').then(m => ({ default: m.TeacherDashboard })));
+const StudentDashboard = lazy(() => import('../pages/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
+const StudentRequests = lazy(() => import('../pages/teacher/StudentRequests').then(m => ({ default: m.StudentRequests })));
+const MyBookings = lazy(() => import('../pages/student/MyBookings').then(m => ({ default: m.MyBookings })));
+const MessagesPage = lazy(() => import('../pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
+const Unauthorized = lazy(() => import('../pages/Unauthorized').then(m => ({ default: m.Unauthorized })));
+
+// Wrap lazy components with Suspense
+const withSuspense = (Component: React.ComponentType) => (
+  <Suspense fallback={<LoadingSpinner />}>
+    <Component />
+  </Suspense>
+);
 
 export const router = createBrowserRouter([
   {
     element: <Layout />,
-    errorElement: <ErrorPage />,
+    errorElement: withSuspense(ErrorPage),
     children: [
       {
         path: '/',
-        element: <HomePage />
+        element: withSuspense(HomePage)
       },
       {
         path: '/teachers',
-        element: <TeacherDirectory />
+        element: withSuspense(TeacherDirectory)
       },
       {
         path: '/teachers/:id',
-        element: <TeacherProfile />
+        element: withSuspense(TeacherProfile)
       },
       {
         path: '/unauthorized',
-        element: <Unauthorized />
+        element: withSuspense(Unauthorized)
       },
       {
         path: '/profile',
-        element: <ProtectedRoute><ProfilePage /></ProtectedRoute>
+        element: <ProtectedRoute>{withSuspense(ProfilePage)}</ProtectedRoute>
       },
       {
         path: '/messages',
-        element: <ProtectedRoute><MessagesPage /></ProtectedRoute>
+        element: <ProtectedRoute>{withSuspense(MessagesPage)}</ProtectedRoute>
       },
       {
         path: '/messages/:conversationId',
-        element: <ProtectedRoute><MessagesPage /></ProtectedRoute>
+        element: <ProtectedRoute>{withSuspense(MessagesPage)}</ProtectedRoute>
       },
       {
         path: '/teacher/dashboard',
-        element: <ProtectedRoute allowedRoles={['teacher']}><TeacherDashboard /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['teacher']}>{withSuspense(TeacherDashboard)}</ProtectedRoute>
       },
       {
         path: '/teacher/requests',
-        element: <ProtectedRoute allowedRoles={['teacher']}><StudentRequests /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['teacher']}>{withSuspense(StudentRequests)}</ProtectedRoute>
       },
       {
         path: '/student/dashboard',
-        element: <ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['student']}>{withSuspense(StudentDashboard)}</ProtectedRoute>
       },
       {
         path: '/student/bookings',
-        element: <ProtectedRoute allowedRoles={['student']}><MyBookings /></ProtectedRoute>
+        element: <ProtectedRoute allowedRoles={['student']}>{withSuspense(MyBookings)}</ProtectedRoute>
       },
       {
         path: '*',

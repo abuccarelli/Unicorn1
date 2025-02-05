@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "analyze": "vite build --mode analyze",
+    "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "validate": "npm run lint && npm run typecheck",
+    "clean": "rimraf dist .vite"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -24,15 +29,17 @@
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@types/uuid": "^9.0.7",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.18",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.35",
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.5",
+    "rollup-plugin-visualizer": "^5.12.0",
     "tailwindcss": "^3.4.1",
+    "terser": "^5.27.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.12"
   }

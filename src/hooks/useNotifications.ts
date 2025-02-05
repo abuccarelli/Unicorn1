@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuthContext } from '../context/AuthContext';
@@ -11,22 +11,26 @@ export function useNotifications() {
   const [counts, setCounts] = useState<NotificationCount>({ total: 0, unread: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<any>(null);
+  const mounted = useRef(true);
 
-  const validateDate = (dateStr: string): string => {
+  // Validate date helper
+  const validateDate = useCallback((dateStr: string): string => {
     try {
       const dt = DateTime.fromISO(dateStr, { zone: 'UTC' });
       if (!dt.isValid) {
         console.error('Invalid date detected:', dateStr);
-        return 'Invalid date';
+        return DateTime.now().toISO()!;
       }
-      return dt.toISO();
+      return dt.toISO()!;
     } catch (error) {
       console.error('Date validation error:', error);
-      return 'Invalid date';
+      return DateTime.now().toISO()!;
     }
-  };
+  }, []);
 
-  const fetchNotifications = async () => {
+  // Fetch notifications handler
+  const fetchNotifications = useCallback(async () => {
     if (!user) {
       setNotifications([]);
       setCounts({ total: 0, unread: 0 });
@@ -51,42 +55,70 @@ export function useNotifications() {
         createdAt: validateDate(notification.created_at)
       }));
 
-      setNotifications(notificationData);
-      setCounts({
-        total: notificationData.length,
-        unread: notificationData.filter(n => !n.read).length
-      });
+      if (mounted.current) {
+        setNotifications(notificationData);
+        setCounts({
+          total: notificationData.length,
+          unread: notificationData.filter(n => !n.read).length
+        });
+      }
     } catch (err) {
       console.error('Error loading notifications:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load notifications');
-      toast.error('Failed to load notifications');
+      if (mounted.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load notifications');
+        toast.error('Failed to load notifications');
+      }
     } finally {
-      setLoading(false);
+      if (mounted.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [user, validateDate]);
 
+  // Setup real-time subscription
   useEffect(() => {
+    if (!user) return;
+
+    const setupSubscription = async () => {
+      try {
+        // Clean up existing subscription
+        if (channelRef.current) {
+          await channelRef.current.unsubscribe();
+        }
+
+        const channel = supabase.channel(`user_notifications:${user.id}`)
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          }, () => {
+            if (mounted.current) {
+              fetchNotifications();
+            }
+          });
+
+        channelRef.current = channel;
+        await channel.subscribe();
+      } catch (error) {
+        console.error('Subscription error:', error);
+        toast.error('Failed to subscribe to notifications');
+      }
+    };
+
+    setupSubscription();
     fetchNotifications();
 
-    if (user) {
-      const channel = supabase.channel(`user_notifications:${user.id}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        }, () => {
-          fetchNotifications();
-        })
-        .subscribe();
+    return () => {
+      mounted.current = false;
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+      }
+    };
+  }, [user, fetchNotifications]);
 
-      return () => {
-        channel.unsubscribe();
-      };
-    }
-  }, [user]);
-
-  const markAsRead = async (id: string) => {
+  // Mark as read handler
+  const markAsRead = useCallback(async (id: string) => {
     if (!user) return;
 
     try {
@@ -110,9 +142,10 @@ export function useNotifications() {
       console.error('Error marking notification as read:', err);
       toast.error('Failed to mark notification as read');
     }
-  };
+  }, [user]);
 
-  const markAllAsRead = async () => {
+  // Mark all as read handler
+  const markAllAsRead = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -138,7 +171,7 @@ export function useNotifications() {
       console.error('Error marking all notifications as read:', err);
       toast.error('Failed to mark all notifications as read');
     }
-  };
+  }, [user]);
 
   return {
     notifications,

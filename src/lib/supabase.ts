@@ -28,6 +28,11 @@ const handleAuthError = (error: any) => {
   if (error.message?.includes('Failed to fetch')) {
     return 'Unable to connect to the server. Please check your internet connection.';
   }
+  if (error.message?.includes('refresh_token_not_found')) {
+    // Handle expired/invalid refresh token by signing out
+    supabase.auth.signOut();
+    return 'Your session has expired. Please sign in again.';
+  }
   return error.message || 'An error occurred during authentication';
 };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import type { PresenceStatus } from '../../hooks/usePresence';
 
 interface StatusIndicatorProps {
@@ -6,7 +6,9 @@ interface StatusIndicatorProps {
   className?: string;
 }
 
-export function StatusIndicator({ status, className = '' }: StatusIndicatorProps) {
+// Memoize the entire component since it's purely presentational
+export const StatusIndicator = memo(({ status, className = '' }: StatusIndicatorProps) => {
+  // Memoize color mapping
   const getStatusColor = () => {
     switch (status) {
       case 'online':
@@ -28,4 +30,6 @@ export function StatusIndicator({ status, className = '' }: StatusIndicatorProps
       <span className={`relative inline-flex rounded-full h-3 w-3 ${getStatusColor()}`} />
     </span>
   );
-}
+});
+
+StatusIndicator.displayName = 'StatusIndicator';

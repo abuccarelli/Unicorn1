@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuthContext } from '../context/AuthContext';
@@ -16,7 +16,7 @@ export function useMessages(conversationId: string) {
   const mounted = useRef(true);
 
   // Cleanup function
-  const cleanupSubscriptions = async () => {
+  const cleanupSubscriptions = useCallback(async () => {
     try {
       if (channelRef.current) {
         await channelRef.current.unsubscribe();
@@ -29,7 +29,7 @@ export function useMessages(conversationId: string) {
     } catch (err) {
       console.error('Error cleaning up subscriptions:', err);
     }
-  };
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -41,58 +41,61 @@ export function useMessages(conversationId: string) {
       }
       cleanupSubscriptions();
     };
-  }, []);
+  }, [cleanupSubscriptions]);
 
-  // Main effect for messages and subscriptions
-  useEffect(() => {
+  // Fetch messages handler
+  const fetchMessages = useCallback(async () => {
     if (!user || !conversationId) return;
 
-    const fetchMessages = async () => {
-      try {
-        setLoading(true);
-        const { data: messagesData, error: messagesError } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            message_attachments (
-              id,
-              file_name,
-              file_size,
-              file_type,
-              file_path,
-              public_url
-            )
-          `)
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
+    try {
+      setLoading(true);
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          message_attachments (
+            id,
+            file_name,
+            file_size,
+            file_type,
+            file_path,
+            public_url
+          )
+        `)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
 
-        if (messagesError) throw messagesError;
-        if (mounted.current) {
-          setMessages(messagesData || []);
-        }
-
-        // Mark messages as read
-        const unreadMessages = messagesData?.filter(
-          m => m.sender_id !== user.id && !m.read_at
-        ) || [];
-
-        if (unreadMessages.length > 0) {
-          await supabase
-            .from('messages')
-            .update({ read_at: new Date().toISOString() })
-            .in('id', unreadMessages.map(m => m.id));
-        }
-      } catch (err) {
-        console.error('Error fetching messages:', err);
-        if (mounted.current) {
-          setError('Failed to load messages');
-        }
-      } finally {
-        if (mounted.current) {
-          setLoading(false);
-        }
+      if (messagesError) throw messagesError;
+      if (mounted.current) {
+        setMessages(messagesData || []);
       }
-    };
+
+      // Mark messages as read
+      const unreadMessages = messagesData?.filter(
+        m => m.sender_id !== user.id && !m.read_at
+      ) || [];
+
+      if (unreadMessages.length > 0) {
+        await supabase
+          .from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .in('id', unreadMessages.map(m => m.id));
+      }
+    } catch (err) {
+      console.error('Error fetching messages:', err);
+      if (mounted.current) {
+        setError('Failed to load messages');
+      }
+    } finally {
+      if (mounted.current) {
+        setLoading(false);
+      }
+    }
+  }, [user, conversationId]);
+
+  // Setup subscriptions
+  useEffect(() => {
+    if (!user || !conversationId) return;
 
     const setupSubscriptions = async () => {
       try {
@@ -155,17 +158,12 @@ export function useMessages(conversationId: string) {
       }
     };
 
-    // Initial setup
-    fetchMessages();
     setupSubscriptions();
+    fetchMessages();
 
-    // Cleanup when conversation changes
-    return () => {
-      cleanupSubscriptions();
-    };
-  }, [user, conversationId]);
+  }, [user, conversationId, cleanupSubscriptions, fetchMessages]);
 
-  const setTyping = async (isTyping: boolean) => {
+  const setTyping = useCallback(async (isTyping: boolean) => {
     if (!user || !conversationId || !typingChannelRef.current) return;
 
     try {
@@ -180,9 +178,9 @@ export function useMessages(conversationId: string) {
     } catch (error) {
       console.error('Error updating typing status:', error);
     }
-  };
+  }, [user, conversationId]);
 
-  const sendMessage = async (content: string, attachments?: File[]) => {
+  const sendMessage = useCallback(async (content: string, attachments?: File[]) => {
     if (!user) return;
     
     const hasContent = content.trim().length > 0;
@@ -305,7 +303,7 @@ export function useMessages(conversationId: string) {
       toast.error('Failed to send message');
       throw err;
     }
-  };
+  }, [user, conversationId]);
 
   return { 
     messages, 

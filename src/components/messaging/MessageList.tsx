@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useAuthContext } from '../../context/AuthContext';
 import { formatMessageTime } from '../../utils/dateTime';
 import { FileText, Image, Paperclip, Loader2, AlertCircle } from 'lucide-react';
@@ -10,6 +10,105 @@ interface MessageListProps {
   messages: Message[];
   typingUser?: string | null;
 }
+
+// Memoize attachment icon components
+const FileIcon = React.memo(() => <FileText className="h-4 w-4 flex-shrink-0" />);
+const ImageIcon = React.memo(() => <Image className="h-4 w-4 flex-shrink-0" />);
+const AttachmentIcon = React.memo(() => <Paperclip className="h-4 w-4 flex-shrink-0" />);
+const WarningIcon = React.memo(() => <AlertCircle className="h-3 w-3 mr-1" />);
+
+// Memoized message component for better performance
+const MessageItem = React.memo(({ 
+  message, 
+  isSender, 
+  showDate,
+  handleAttachmentClick 
+}: { 
+  message: Message;
+  isSender: boolean;
+  showDate: boolean;
+  handleAttachmentClick: (attachment: any) => Promise<void>;
+}) => {
+  const renderAttachment = useCallback((attachment: any) => {
+    const isImage = attachment.file_type.startsWith('image/');
+    const isPdf = attachment.file_type === 'application/pdf';
+    
+    if (isImage) {
+      return (
+        <div className="mt-2">
+          <img
+            src={attachment.public_url}
+            alt={attachment.file_name}
+            className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer hover:opacity-90"
+            onClick={() => handleAttachmentClick(attachment)}
+            loading="lazy"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-2">
+        <button
+          onClick={() => handleAttachmentClick(attachment)}
+          className={`flex items-center space-x-2 text-sm ${
+            isPdf ? 'text-red-600 hover:text-red-800' : 'text-blue-600 hover:text-blue-800'
+          } hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md`}
+        >
+          {isPdf ? <FileIcon /> : <AttachmentIcon />}
+          <span className="truncate">{attachment.file_name}</span>
+        </button>
+        {isPdf && (
+          <p className="mt-1 text-xs text-gray-500 flex items-center">
+            <WarningIcon />
+            Link expires after 1 hour
+          </p>
+        )}
+      </div>
+    );
+  }, [handleAttachmentClick]);
+
+  return (
+    <React.Fragment>
+      {showDate && (
+        <div className="flex justify-center my-4">
+          <span className="px-4 py-1 rounded-full bg-white/70 text-gray-600 text-xs font-medium shadow-sm">
+            {new Date(message.created_at).toLocaleDateString(undefined, { 
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </span>
+        </div>
+      )}
+      <div className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
+        <div
+          className={`max-w-[70%] rounded-lg px-4 py-2 shadow-sm ${
+            isSender
+              ? 'bg-[#dcf8c6] ml-12'
+              : 'bg-white mr-12'
+          }`}
+        >
+          <p className="text-sm whitespace-pre-wrap text-gray-800">{message.content}</p>
+          {message.message_attachments?.map((attachment, i) => (
+            <div key={i}>{renderAttachment(attachment)}</div>
+          ))}
+          <div className="flex items-center justify-end mt-1 space-x-1">
+            <p className="text-xs text-gray-500">
+              {formatMessageTime(message.created_at)}
+            </p>
+            {message.read_at && isSender && (
+              <span className="text-xs text-blue-500">✓✓</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </React.Fragment>
+  );
+});
+
+MessageItem.displayName = 'MessageItem';
 
 export function MessageList({ messages, typingUser }: MessageListProps) {
   const { user } = useAuthContext();
@@ -39,7 +138,7 @@ export function MessageList({ messages, typingUser }: MessageListProps) {
     }
   }, [messages, typingUser, autoScroll]);
 
-  const handleAttachmentClick = async (attachment: any) => {
+  const handleAttachmentClick = useCallback(async (attachment: any) => {
     try {
       const isPdf = attachment.file_type === 'application/pdf';
       
@@ -87,49 +186,29 @@ export function MessageList({ messages, typingUser }: MessageListProps) {
         toast.error('Failed to open attachment. Please try again.');
       }
     }
-  };
+  }, []);
 
-  const renderAttachment = (attachment: any) => {
-    const isImage = attachment.file_type.startsWith('image/');
-    const isPdf = attachment.file_type === 'application/pdf';
-    
-    if (isImage) {
+  // Memoize message rendering logic
+  const messageElements = useMemo(() => {
+    if (!user) return null;
+
+    return messages.map((message, index) => {
+      const isSender = message.sender_id === user.id;
+      const showDate = index === 0 || 
+        new Date(message.created_at).toDateString() !== 
+        new Date(messages[index - 1].created_at).toDateString();
+
       return (
-        <div className="mt-2">
-          <img
-            src={attachment.public_url}
-            alt={attachment.file_name}
-            className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer hover:opacity-90"
-            onClick={() => handleAttachmentClick(attachment)}
-          />
-        </div>
+        <MessageItem
+          key={message.id || message.created_at}
+          message={message}
+          isSender={isSender}
+          showDate={showDate}
+          handleAttachmentClick={handleAttachmentClick}
+        />
       );
-    }
-
-    return (
-      <div className="mt-2">
-        <button
-          onClick={() => handleAttachmentClick(attachment)}
-          className={`flex items-center space-x-2 text-sm ${
-            isPdf ? 'text-red-600 hover:text-red-800' : 'text-blue-600 hover:text-blue-800'
-          } hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md`}
-        >
-          {isPdf ? (
-            <FileText className="h-4 w-4 flex-shrink-0" />
-          ) : (
-            <Paperclip className="h-4 w-4 flex-shrink-0" />
-          )}
-          <span className="truncate">{attachment.file_name}</span>
-        </button>
-        {isPdf && (
-          <p className="mt-1 text-xs text-gray-500 flex items-center">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Link expires after 1 hour
-          </p>
-        )}
-      </div>
-    );
-  };
+    });
+  }, [messages, user, handleAttachmentClick]);
 
   if (messages.length === 0 && !typingUser) {
     return (
@@ -147,51 +226,7 @@ export function MessageList({ messages, typingUser }: MessageListProps) {
       ref={containerRef}
       className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#e5ded8]"
     >
-      {messages.map((message, index) => {
-        const isSender = message.sender_id === user?.id;
-        const showDate = index === 0 || 
-          new Date(message.created_at).toDateString() !== 
-          new Date(messages[index - 1].created_at).toDateString();
-
-        return (
-          <React.Fragment key={message.id || message.created_at}>
-            {showDate && (
-              <div className="flex justify-center my-4">
-                <span className="px-4 py-1 rounded-full bg-white/70 text-gray-600 text-xs font-medium shadow-sm">
-                  {new Date(message.created_at).toLocaleDateString(undefined, { 
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </span>
-              </div>
-            )}
-            <div className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[70%] rounded-lg px-4 py-2 shadow-sm ${
-                  isSender
-                    ? 'bg-[#dcf8c6] ml-12'
-                    : 'bg-white mr-12'
-                }`}
-              >
-                <p className="text-sm whitespace-pre-wrap text-gray-800">{message.content}</p>
-                {message.message_attachments?.map((attachment, i) => (
-                  <div key={i}>{renderAttachment(attachment)}</div>
-                ))}
-                <div className="flex items-center justify-end mt-1 space-x-1">
-                  <p className="text-xs text-gray-500">
-                    {formatMessageTime(message.created_at)}
-                  </p>
-                  {message.read_at && isSender && (
-                    <span className="text-xs text-blue-500">✓✓</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </React.Fragment>
-        );
-      })}
+      {messageElements}
 
       {typingUser && (
         <div className="flex justify-start">

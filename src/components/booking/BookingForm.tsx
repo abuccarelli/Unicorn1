@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { Clock, Globe } from 'lucide-react';
 import { DateTime } from 'luxon';
@@ -10,6 +10,32 @@ interface BookingFormProps {
   teacher: Teacher;
   onSubmit: (data: BookingFormData) => Promise<void>;
 }
+
+// Memoized timezone display component
+const TimezoneInfo = React.memo(({ 
+  userTimezone, 
+  teacherTimezone, 
+  teacherTime 
+}: { 
+  userTimezone: string;
+  teacherTimezone: string;
+  teacherTime: string | null;
+}) => (
+  <div className="flex items-start space-x-4 text-sm text-gray-500">
+    <div className="flex items-center">
+      <Clock className="h-4 w-4 mr-1" />
+      <span>Your time ({userTimezone})</span>
+    </div>
+    {teacherTime && (
+      <div className="flex items-center">
+        <Globe className="h-4 w-4 mr-1" />
+        <span>Teacher's time: {teacherTime} ({teacherTimezone})</span>
+      </div>
+    )}
+  </div>
+));
+
+TimezoneInfo.displayName = 'TimezoneInfo';
 
 export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
   const { user } = useAuthContext();
@@ -23,10 +49,32 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
   });
 
   // Get user's timezone
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const userTimezone = useMemo(() => 
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    []
+  );
   const teacherTimezone = teacher.timezone || userTimezone;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Memoize teacher time conversion
+  const getTeacherTime = useCallback((): string | null => {
+    if (!formData.date || !formData.time) return null;
+    
+    const localDateTime = DateTime.fromFormat(
+      `${formData.date} ${formData.time}`, 
+      'yyyy-MM-dd HH:mm',
+      { zone: userTimezone }
+    );
+
+    if (!localDateTime.isValid) return null;
+
+    const teacherTime = localDateTime.setZone(teacherTimezone);
+    return teacherTime.toFormat('h:mm a');
+  }, [formData.date, formData.time, userTimezone, teacherTimezone]);
+
+  const teacherTime = useMemo(() => getTeacherTime(), [getTeacherTime]);
+
+  // Memoize form submission handler
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       toast.error('Please sign in to book a session');
@@ -35,7 +83,6 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
 
     setLoading(true);
     try {
-      // Create DateTime object from local input in user's timezone
       const localDateTime = DateTime.fromFormat(
         `${formData.date} ${formData.time}`,
         'yyyy-MM-dd HH:mm',
@@ -46,40 +93,38 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
         throw new Error('Invalid date or time');
       }
 
-      // Convert to UTC for storage
       const startTimeUTC = localDateTime.toUTC().toISO();
       
       await onSubmit({
         ...formData,
         startTimeUTC
       });
-      toast.success('Booking request sent successfully');
+      
+      // Clear form after successful submission
+      setFormData({
+        subject: teacher.subjects?.[0] || '',
+        date: '',
+        time: '',
+        duration: 1,
+        message: ''
+      });
     } catch (error) {
+      // Only show error toast for form-specific errors
       toast.error('Failed to submit booking request');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, formData, userTimezone, onSubmit, teacher.subjects]);
 
-  // Convert selected time to teacher's timezone for preview
-  const getTeacherTime = (): string | null => {
-    if (!formData.date || !formData.time) return null;
-    
-    // Create DateTime object from local input in user's timezone
-    const localDateTime = DateTime.fromFormat(
-      `${formData.date} ${formData.time}`, 
-      'yyyy-MM-dd HH:mm',
-      { zone: userTimezone }
-    );
-
-    if (!localDateTime.isValid) return null;
-
-    // Convert to teacher's timezone
-    const teacherTime = localDateTime.setZone(teacherTimezone);
-    return teacherTime.toFormat('h:mm a');
-  };
-
-  const teacherTime = getTeacherTime();
+  // Memoize subject options
+  const subjectOptions = useMemo(() => 
+    teacher.subjects?.map(subject => (
+      <option key={subject} value={subject}>
+        {subject}
+      </option>
+    )),
+    [teacher.subjects]
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -87,16 +132,12 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
         <label className="block text-sm font-medium text-gray-700">Subject</label>
         <select
           value={formData.subject}
-          onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           required
         >
           <option value="">Select a subject</option>
-          {teacher.subjects?.map((subject) => (
-            <option key={subject} value={subject}>
-              {subject}
-            </option>
-          ))}
+          {subjectOptions}
         </select>
       </div>
 
@@ -105,7 +146,7 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
         <input
           type="date"
           value={formData.date}
-          onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           required
           min={new Date().toISOString().split('T')[0]}
@@ -118,22 +159,15 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
           <input
             type="time"
             value={formData.time}
-            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+            onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             required
           />
-          <div className="flex items-start space-x-4 text-sm text-gray-500">
-            <div className="flex items-center">
-              <Clock className="h-4 w-4 mr-1" />
-              <span>Your time ({userTimezone})</span>
-            </div>
-            {teacherTime && (
-              <div className="flex items-center">
-                <Globe className="h-4 w-4 mr-1" />
-                <span>Teacher's time: {teacherTime} ({teacherTimezone})</span>
-              </div>
-            )}
-          </div>
+          <TimezoneInfo 
+            userTimezone={userTimezone}
+            teacherTimezone={teacherTimezone}
+            teacherTime={teacherTime}
+          />
         </div>
       </div>
 
@@ -144,7 +178,7 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
           min="1"
           step="1"
           value={formData.duration}
-          onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value, 10) })}
+          onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value, 10) }))}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           required
         />
@@ -154,7 +188,7 @@ export function BookingForm({ teacher, onSubmit }: BookingFormProps) {
         <label className="block text-sm font-medium text-gray-700">Message (Optional)</label>
         <textarea
           value={formData.message}
-          onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
           rows={4}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           placeholder="Any specific requirements or topics you'd like to cover?"

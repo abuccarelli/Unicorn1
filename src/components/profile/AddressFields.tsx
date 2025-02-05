@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { MapPin, Clock, RefreshCw } from 'lucide-react';
 import { EditableField } from './EditableField';
 import { getTimezoneFromLocation, formatTimezoneDisplay } from '../../utils/timezone';
@@ -9,13 +9,44 @@ interface AddressFieldsProps {
   onUpdate: (field: string, value: string) => Promise<void>;
 }
 
+// Memoized timezone display component
+const TimezoneDisplay = React.memo(({ 
+  timezone, 
+  onRefresh 
+}: { 
+  timezone: string | null;
+  onRefresh: () => void;
+}) => {
+  if (!timezone) return null;
+
+  return (
+    <div className="bg-gray-50 px-4 py-3 rounded-md">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center text-sm text-gray-600">
+          <Clock className="h-4 w-4 mr-2" />
+          <span>Time Zone: {formatTimezoneDisplay(timezone)}</span>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="inline-flex items-center px-2 py-1 text-sm text-indigo-600 hover:text-indigo-700 focus:outline-none"
+          title="Refresh timezone"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+});
+
+TimezoneDisplay.displayName = 'TimezoneDisplay';
+
 export function AddressFields({ profile, onUpdate }: AddressFieldsProps) {
   const [userTimezone, setUserTimezone] = useState(getTimezoneFromLocation());
-  const timezoneDisplay = userTimezone ? formatTimezoneDisplay(userTimezone) : null;
 
-  const handleRefreshTimezone = () => {
+  // Memoize refresh handler
+  const handleRefreshTimezone = useCallback(() => {
     setUserTimezone(getTimezoneFromLocation());
-  };
+  }, []);
 
   return (
     <div className="bg-white px-4 py-5 sm:px-6">
@@ -62,23 +93,10 @@ export function AddressFields({ profile, onUpdate }: AddressFieldsProps) {
           placeholder="Enter country"
         />
 
-        {timezoneDisplay && (
-          <div className="bg-gray-50 px-4 py-3 rounded-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center text-sm text-gray-600">
-                <Clock className="h-4 w-4 mr-2" />
-                <span>Time Zone: {timezoneDisplay}</span>
-              </div>
-              <button
-                onClick={handleRefreshTimezone}
-                className="inline-flex items-center px-2 py-1 text-sm text-indigo-600 hover:text-indigo-700 focus:outline-none"
-                title="Refresh timezone"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        <TimezoneDisplay 
+          timezone={userTimezone} 
+          onRefresh={handleRefreshTimezone} 
+        />
       </div>
     </div>
   );
