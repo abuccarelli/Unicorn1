@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, memo } from 'react';
 import { EditableField } from './EditableField';
 import { ProfilePicture } from './ProfilePicture';
 import { AddressFields } from './AddressFields';
@@ -40,13 +40,9 @@ export function ProfileView() {
     }
   }, [updateProfile]);
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!profile) return null;
-
-  // Memoize sections based on role
+  // Memoize teacher sections
   const teacherSections = useMemo(() => {
-    if (profile.role !== 'teacher') return null;
+    if (!profile || profile.role !== 'teacher') return null;
 
     return (
       <>
@@ -91,6 +87,10 @@ export function ProfileView() {
       </>
     );
   }, [profile, handleUpdate]);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <div className="text-red-600">{error}</div>;
+  if (!profile) return null;
 
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
