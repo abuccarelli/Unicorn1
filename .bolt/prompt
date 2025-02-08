@@ -6,3 +6,39 @@ Use icons from lucide-react for logos.
 
 Use stock photos from unsplash where appropriate, only valid URLs you know exist. Do not download the images, only link to them in image tags.
 
+optimization sequence to have a low latency to be applied anytime possible:
+
+Bundle Analysis
+
+First understand your current bottlenecks
+Identify unnecessary dependencies
+Remove or replace heavy libraries
+Understand actual performance constraints
+
+Code Splitting
+
+Break down large applications
+Implement lazy loading for routes/components
+Reduce initial bundle size
+Improve first meaningful paint time
+
+Performance Optimization
+
+Reduce unnecessary re-renders
+Optimize component lifecycle methods
+Use memoization techniques
+Improve React render efficiency
+
+Caching Strategies
+
+Implement client-side caching
+Configure service workers
+Set up proper HTTP caching headers
+Reduce repeated network requests
+
+Network & Asset Optimization
+
+Compress and optimize assets
+Use modern image formats
+Implement CDN for static assets
+Minimize external resource loading

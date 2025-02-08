@@ -13,9 +13,10 @@ export function useNotifications() {
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
   const mounted = useRef(true);
+  const retryTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Fetch notifications handler
-  const fetchNotifications = useCallback(async () => {
+  // Fetch notifications handler with retry logic
+  const fetchNotifications = useCallback(async (retryCount = 0) => {
     if (!user) {
       setNotifications([]);
       setCounts({ total: 0, unread: 0 });
@@ -24,16 +25,31 @@ export function useNotifications() {
     }
 
     try {
-      console.log('Fetching notifications for user:', user.id);
       const { data, error: fetchError } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        // If session error, let auth context handle it
+        if (fetchError.message?.includes('JWT')) {
+          throw fetchError;
+        }
+        // For network errors, retry up to 3 times
+        if (fetchError.message?.includes('Failed to fetch') && retryCount < 3) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+          retryTimeoutRef.current = setTimeout(() => {
+            if (mounted.current) {
+              fetchNotifications(retryCount + 1);
+            }
+          }, delay);
+          return;
+        }
+        throw fetchError;
+      }
 
-      // Deduplicate notifications by content and created_at within a 1-second window
+      // Deduplicate notifications
       const deduplicatedData = data?.reduce((acc, notification) => {
         const isDuplicate = acc.some(n => 
           n.content === notification.content &&
@@ -41,7 +57,7 @@ export function useNotifications() {
           Math.abs(
             DateTime.fromISO(n.created_at).toMillis() - 
             DateTime.fromISO(notification.created_at).toMillis()
-          ) < 1000 // 1 second window
+          ) < 1000
         );
 
         if (!isDuplicate) {
@@ -67,6 +83,10 @@ export function useNotifications() {
       console.error('Error loading notifications:', err);
       if (mounted.current) {
         setError('Failed to load notifications');
+        // Only show toast for non-network errors
+        if (!err.message?.includes('Failed to fetch')) {
+          toast.error('Failed to load notifications');
+        }
       }
     } finally {
       if (mounted.current) {
@@ -77,6 +97,8 @@ export function useNotifications() {
 
   // Setup subscription
   useEffect(() => {
+    mounted.current = true;
+
     if (!user) {
       setNotifications([]);
       setCounts({ total: 0, unread: 0 });
@@ -84,31 +106,52 @@ export function useNotifications() {
       return;
     }
 
-    console.log('Setting up notifications subscription');
-    setLoading(true);
-
-    const channel = supabase.channel(`notifications:${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, () => {
-        console.log('Notification change detected, refreshing...');
-        // Add a small delay to ensure all notifications are created
-        setTimeout(fetchNotifications, 100);
-      })
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          fetchNotifications();
+    // Setup realtime subscription
+    const setupSubscription = async () => {
+      try {
+        // Clean up existing subscription
+        if (channelRef.current) {
+          await channelRef.current.unsubscribe();
         }
-      });
 
-    channelRef.current = channel;
+        const channel = supabase.channel(`notifications:${user.id}`)
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          }, () => {
+            if (mounted.current) {
+              fetchNotifications();
+            }
+          })
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED' && mounted.current) {
+              fetchNotifications();
+            }
+          });
 
+        channelRef.current = channel;
+
+      } catch (err) {
+        console.error('Subscription error:', err);
+        // Retry subscription after delay
+        setTimeout(() => {
+          if (mounted.current) {
+            setupSubscription();
+          }
+        }, 5000);
+      }
+    };
+
+    setupSubscription();
+
+    // Cleanup function
     return () => {
-      console.log('Cleaning up notifications subscription');
+      mounted.current = false;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
       if (channelRef.current) {
         channelRef.current.unsubscribe();
       }

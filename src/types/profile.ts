@@ -18,6 +18,11 @@ export interface Profile {
   utc_offset?: number | null;
   hourly_rate?: number;
   currency?: string;
+  date_of_birth?: string;
+  guardian_first_name?: string;
+  guardian_last_name?: string;
+  guardian_email?: string;
+  guardian_phone?: string;
 }
 
 export interface ProfileUpdateData {
@@ -34,4 +39,9 @@ export interface ProfileUpdateData {
   country?: string;
   hourly_rate?: number;
   currency?: string;
+  date_of_birth?: string;
+  guardian_first_name?: string;
+  guardian_last_name?: string;
+  guardian_email?: string;
+  guardian_phone?: string;
 }

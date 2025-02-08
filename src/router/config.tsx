@@ -1,76 +1,170 @@
+import React, { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
 import { Layout } from '../components/Layout';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 
-// Lazy load route components
-const HomePage = lazy(() => import('../pages/HomePage').then(m => ({ default: m.HomePage })));
-const ProfilePage = lazy(() => import('../pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
-const TeacherDirectory = lazy(() => import('../pages/TeacherDirectory').then(m => ({ default: m.TeacherDirectory })));
-const TeacherProfile = lazy(() => import('../pages/TeacherProfile').then(m => ({ default: m.TeacherProfile })));
-const TeacherDashboard = lazy(() => import('../pages/TeacherDashboard').then(m => ({ default: m.TeacherDashboard })));
-const StudentDashboard = lazy(() => import('../pages/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
-const StudentRequests = lazy(() => import('../pages/teacher/StudentRequests').then(m => ({ default: m.StudentRequests })));
-const MyBookings = lazy(() => import('../pages/student/MyBookings').then(m => ({ default: m.MyBookings })));
-const MessagesPage = lazy(() => import('../pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
-const Unauthorized = lazy(() => import('../pages/Unauthorized').then(m => ({ default: m.Unauthorized })));
+// Error page component
+function ErrorPage() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+      <h1 className="text-3xl font-bold text-gray-900 mb-4">Page Not Found</h1>
+      <p className="text-gray-600 mb-8 text-center">
+        The page you're looking for doesn't exist or has been moved.
+      </p>
+      <a 
+        href="/" 
+        className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+      >
+        Return to Home
+      </a>
+    </div>
+  );
+}
 
-// Wrap lazy components with Suspense
-const withSuspense = (Component: React.ComponentType) => (
-  <Suspense fallback={<LoadingSpinner />}>
-    <Component />
-  </Suspense>
-);
+// Lazy load pages with proper suspense wrapper
+const withSuspense = (Component: React.LazyExoticComponent<() => JSX.Element>) => {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <Component />
+    </Suspense>
+  );
+};
 
+// Lazy load pages
+const HomePage = lazy(() => import('../pages/HomePage'));
+const ProfilePage = lazy(() => import('../pages/ProfilePage'));
+const TeacherDirectory = lazy(() => import('../pages/TeacherDirectory'));
+const TeacherProfile = lazy(() => import('../pages/TeacherProfile'));
+const TeacherDashboard = lazy(() => import('../pages/TeacherDashboard'));
+const StudentDashboard = lazy(() => import('../pages/StudentDashboard'));
+const StudentRequests = lazy(() => import('../pages/teacher/StudentRequests'));
+const MyBookings = lazy(() => import('../pages/student/MyBookings'));
+const MessagesPage = lazy(() => import('../pages/MessagesPage'));
+const Unauthorized = lazy(() => import('../pages/Unauthorized'));
+const JobBoard = lazy(() => import('../pages/JobBoard'));
+const NewJobPost = lazy(() => import('../pages/NewJobPost'));
+const JobPost = lazy(() => import('../pages/JobPost'));
+
+// Router configuration
 export const router = createBrowserRouter([
   {
+    path: '/',
     element: <Layout />,
-    errorElement: withSuspense(ErrorPage),
+    errorElement: <ErrorPage />,
     children: [
       {
-        path: '/',
+        index: true,
         element: withSuspense(HomePage)
       },
       {
-        path: '/teachers',
-        element: withSuspense(TeacherDirectory)
+        path: 'teachers',
+        children: [
+          {
+            index: true,
+            element: withSuspense(TeacherDirectory)
+          },
+          {
+            path: ':id',
+            element: withSuspense(TeacherProfile)
+          }
+        ]
       },
       {
-        path: '/teachers/:id',
-        element: withSuspense(TeacherProfile)
-      },
-      {
-        path: '/unauthorized',
+        path: 'unauthorized',
         element: withSuspense(Unauthorized)
       },
       {
-        path: '/profile',
-        element: <ProtectedRoute>{withSuspense(ProfilePage)}</ProtectedRoute>
+        path: 'profile',
+        element: (
+          <ProtectedRoute>
+            {withSuspense(ProfilePage)}
+          </ProtectedRoute>
+        )
       },
       {
-        path: '/messages',
-        element: <ProtectedRoute>{withSuspense(MessagesPage)}</ProtectedRoute>
+        path: 'messages',
+        children: [
+          {
+            index: true,
+            element: (
+              <ProtectedRoute>
+                {withSuspense(MessagesPage)}
+              </ProtectedRoute>
+            )
+          },
+          {
+            path: ':conversationId',
+            element: (
+              <ProtectedRoute>
+                {withSuspense(MessagesPage)}
+              </ProtectedRoute>
+            )
+          }
+        ]
       },
       {
-        path: '/messages/:conversationId',
-        element: <ProtectedRoute>{withSuspense(MessagesPage)}</ProtectedRoute>
+        path: 'teacher',
+        children: [
+          {
+            path: 'dashboard',
+            element: (
+              <ProtectedRoute allowedRoles={['teacher']}>
+                {withSuspense(TeacherDashboard)}
+              </ProtectedRoute>
+            )
+          },
+          {
+            path: 'requests',
+            element: (
+              <ProtectedRoute allowedRoles={['teacher']}>
+                {withSuspense(StudentRequests)}
+              </ProtectedRoute>
+            )
+          }
+        ]
       },
       {
-        path: '/teacher/dashboard',
-        element: <ProtectedRoute allowedRoles={['teacher']}>{withSuspense(TeacherDashboard)}</ProtectedRoute>
+        path: 'student',
+        children: [
+          {
+            path: 'dashboard',
+            element: (
+              <ProtectedRoute allowedRoles={['student']}>
+                {withSuspense(StudentDashboard)}
+              </ProtectedRoute>
+            )
+          },
+          {
+            path: 'bookings',
+            element: (
+              <ProtectedRoute allowedRoles={['student']}>
+                {withSuspense(MyBookings)}
+              </ProtectedRoute>
+            )
+          }
+        ]
       },
       {
-        path: '/teacher/requests',
-        element: <ProtectedRoute allowedRoles={['teacher']}>{withSuspense(StudentRequests)}</ProtectedRoute>
-      },
-      {
-        path: '/student/dashboard',
-        element: <ProtectedRoute allowedRoles={['student']}>{withSuspense(StudentDashboard)}</ProtectedRoute>
-      },
-      {
-        path: '/student/bookings',
-        element: <ProtectedRoute allowedRoles={['student']}>{withSuspense(MyBookings)}</ProtectedRoute>
+        path: 'jobs',
+        children: [
+          {
+            index: true,
+            element: withSuspense(JobBoard)
+          },
+          {
+            path: 'new',
+            element: (
+              <ProtectedRoute allowedRoles={['student']}>
+                {withSuspense(NewJobPost)}
+              </ProtectedRoute>
+            )
+          },
+          {
+            path: ':id',
+            element: withSuspense(JobPost)
+          }
+        ]
       },
       {
         path: '*',
@@ -79,17 +173,3 @@ export const router = createBrowserRouter([
     ]
   }
 ]);
-
-function ErrorPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Page Not Found</h1>
-        <p className="text-gray-600 mb-4">The page you're looking for doesn't exist.</p>
-        <a href="/" className="text-indigo-600 hover:text-indigo-500">
-          Return to Home
-        </a>
-      </div>
-    </div>
-  );
-}

@@ -7,67 +7,67 @@
     "react": {
       "src": "../../node_modules/react/index.js",
       "file": "react.js",
-      "fileHash": "765420a8",
+      "fileHash": "2ab9d3c2",
       "needsInterop": true
     },
     "react-dom": {
       "src": "../../node_modules/react-dom/index.js",
       "file": "react-dom.js",
-      "fileHash": "60bb0bba",
+      "fileHash": "f3c36300",
       "needsInterop": true
     },
     "react-router-dom": {
       "src": "../../node_modules/react-router-dom/dist/index.js",
       "file": "react-router-dom.js",
-      "fileHash": "f32e5a6c",
+      "fileHash": "ff1b88bf",
       "needsInterop": false
     },
     "@supabase/supabase-js": {
       "src": "../../node_modules/@supabase/supabase-js/dist/module/index.js",
       "file": "@supabase_supabase-js.js",
-      "fileHash": "acb644ba",
+      "fileHash": "4fbbcaa1",
       "needsInterop": false
     },
     "luxon": {
       "src": "../../node_modules/luxon/src/luxon.js",
       "file": "luxon.js",
-      "fileHash": "1b8e21d9",
+      "fileHash": "c60ced52",
       "needsInterop": false
     },
     "uuid": {
       "src": "../../node_modules/uuid/dist/esm-browser/index.js",
       "file": "uuid.js",
-      "fileHash": "1f8a25e8",
+      "fileHash": "7ed95e1d",
       "needsInterop": false
     },
     "react-hot-toast": {
       "src": "../../node_modules/react-hot-toast/dist/index.mjs",
       "file": "react-hot-toast.js",
-      "fileHash": "e30a053f",
+      "fileHash": "5f3b7ad2",
       "needsInterop": false
     },
     "lucide-react": {
       "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
       "file": "lucide-react.js",
-      "fileHash": "e2a92529",
+      "fileHash": "e740e0e3",
       "needsInterop": false
     },
     "react/jsx-dev-runtime": {
       "src": "../../node_modules/react/jsx-dev-runtime.js",
       "file": "react_jsx-dev-runtime.js",
-      "fileHash": "e11e9b5a",
+      "fileHash": "a5f65626",
       "needsInterop": true
     },
     "react/jsx-runtime": {
       "src": "../../node_modules/react/jsx-runtime.js",
       "file": "react_jsx-runtime.js",
-      "fileHash": "449a7764",
+      "fileHash": "4e6bd720",
       "needsInterop": true
     },
     "react-dom/client": {
       "src": "../../node_modules/react-dom/client.js",
       "file": "react-dom_client.js",
-      "fileHash": "01e3ca79",
+      "fileHash": "bfdb4246",
       "needsInterop": true
     }
   },

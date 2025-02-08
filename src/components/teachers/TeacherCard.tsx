@@ -32,7 +32,7 @@ export function TeacherCard({ teacher }: TeacherCardProps) {
       <div className="p-6">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xl font-semibold text-gray-900">
-            {teacher.firstName} {teacher.lastName}
+            {teacher.firstName} {teacher.lastName[0]}.
           </h3>
           <div className="flex items-center space-x-2">
             <span className={`text-sm font-medium ${

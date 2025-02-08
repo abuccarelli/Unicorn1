@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Menu, X } from 'lucide-react';
+import { BookOpen, Menu, X, BriefcaseIcon } from 'lucide-react';
 import { AuthButtons } from './AuthButtons';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { useAuthContext } from '../../context/AuthContext';
@@ -45,6 +45,10 @@ export function Header() {
             <Link to="/teachers" className="text-gray-600 hover:text-gray-900">
               Find Teachers
             </Link>
+            <Link to="/jobs" className="text-gray-600 hover:text-gray-900 flex items-center">
+              <BriefcaseIcon className="h-4 w-4 mr-1" />
+              Job Board
+            </Link>
             {user && <NotificationBell />}
             <AuthButtons />
           </div>
@@ -68,6 +72,13 @@ export function Header() {
               className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50"
             >
               Find Teachers
+            </Link>
+            <Link 
+              to="/jobs"
+              className="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 flex items-center"
+            >
+              <BriefcaseIcon className="h-4 w-4 mr-2" />
+              Job Board
             </Link>
             {user && (
               <Link 

@@ -1,7 +1,15 @@
+import { languages } from './languages';
+
 export interface SubjectCategory {
   name: string;
   subjects: string[];
 }
+
+// Create a languages category that includes all languages
+const languagesCategory: SubjectCategory = {
+  name: 'Languages',
+  subjects: languages
+};
 
 export const subjectCategories: SubjectCategory[] = [
   {
@@ -26,19 +34,8 @@ export const subjectCategories: SubjectCategory[] = [
       'Astronomy'
     ]
   },
-  {
-    name: 'Languages & Literature',
-    subjects: [
-      'English Language & Literature',
-      'French',
-      'Spanish',
-      'German',
-      'Italian',
-      'Chinese',
-      'Creative Writing',
-      'Academic Writing'
-    ]
-  },
+  // Add languages as a subject category
+  languagesCategory,
   {
     name: 'Business & Economics',
     subjects: [

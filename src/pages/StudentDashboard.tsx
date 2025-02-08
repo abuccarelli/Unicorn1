@@ -5,7 +5,7 @@ import { useProfile } from '../hooks/useProfile';
 import { useConversations } from '../hooks/useConversations';
 import { MyBookings } from './student/MyBookings';
 
-export function StudentDashboard() {
+function StudentDashboard() {
   const { profile } = useProfile();
   const { conversations, loading: conversationsLoading } = useConversations();
 
@@ -95,3 +95,5 @@ export function StudentDashboard() {
     </div>
   );
 }
+
+export default StudentDashboard;

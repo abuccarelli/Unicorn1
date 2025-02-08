@@ -5,7 +5,7 @@ import { TeacherSearch } from '../components/teachers/TeacherSearch';
 import { TeacherFilters } from '../components/teachers/TeacherFilters';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
-export function TeacherDirectory() {
+function TeacherDirectory() {
   const { teachers, loading, error, fetchTeachers } = useTeachers();
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
@@ -71,3 +71,5 @@ export function TeacherDirectory() {
     </div>
   );
 }
+
+export default TeacherDirectory;
