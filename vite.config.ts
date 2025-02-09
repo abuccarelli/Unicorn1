@@ -30,9 +30,16 @@ export default defineConfig({
           'vendor-ui': ['react-hot-toast', 'lucide-react'],
           'vendor-utils': ['uuid']
         },
+        // Limit chunk size to 1MB
+        chunkFileNames: (chunkInfo) => {
+          const id = chunkInfo.facadeModuleId || chunkInfo.moduleIds[0];
+          const name = id ? id.split('/').pop()?.split('.')[0] : 'chunk';
+          return `assets/${name}-[hash].js`;
+        },
+        manualChunkSizeThreshold: 1000000 // 1MB in bytes
       },
     },
-    // Optimize chunk loading
+    // Set chunk size warning limit to 1MB
     chunkSizeWarningLimit: 1000,
     // Enable minification optimizations
     minify: 'terser',

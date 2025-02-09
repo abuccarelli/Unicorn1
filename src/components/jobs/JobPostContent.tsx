@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Tag, X, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Tag } from 'lucide-react';
 import { SubjectSelector } from '../profile/SubjectSelector';
 import { LanguageSelector } from '../profile/LanguageSelector';
+import { TagInput } from './TagInput';
 import type { JobPost } from '../../types/job';
 
 interface JobPostContentProps {
@@ -19,138 +20,71 @@ interface JobPostContentProps {
 
 export function JobPostContent({ post, isEditing, editData, onEditChange }: JobPostContentProps) {
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const truncateLength = 300;
   const needsTruncation = post.description.length > truncateLength;
 
-  const handleTagSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onEditChange || !editData || !tagInput.trim()) return;
-
-    // Format tag - capitalize first letter
-    const formattedTag = tagInput.trim().charAt(0).toUpperCase() + tagInput.trim().slice(1).toLowerCase();
-    
-    if (editingTagIndex !== null) {
-      // Modify existing tag
-      const newTags = [...editData.tags];
-      newTags[editingTagIndex] = formattedTag;
-      onEditChange({ tags: newTags });
-      setEditingTagIndex(null);
-    } else {
-      // Add new tag
-      onEditChange({ tags: [...editData.tags, formattedTag] });
+  // Initialize editData.tags from post.tags if not already set
+  useEffect(() => {
+    if (isEditing && editData && onEditChange && (!editData.tags || editData.tags.length === 0) && post.tags?.length > 0) {
+      onEditChange({
+        tags: post.tags.map(tag => tag.name)
+      });
     }
-    setTagInput('');
-  };
-
-  const handleTagEdit = (index: number) => {
-    if (!editData) return;
-    setTagInput(editData.tags[index]);
-    setEditingTagIndex(index);
-  };
-
-  const handleTagDelete = (index: number) => {
-    if (!onEditChange || !editData) return;
-    const newTags = editData.tags.filter((_, i) => i !== index);
-    onEditChange({ tags: newTags });
-    if (editingTagIndex === index) {
-      setEditingTagIndex(null);
-      setTagInput('');
-    }
-  };
+  }, [isEditing, post.tags, editData, onEditChange]);
 
   if (isEditing && editData && onEditChange) {
     return (
       <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-        <div className="px-6 py-4">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Title</label>
-              <input
-                type="text"
-                value={editData.title}
-                onChange={e => onEditChange({ title: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                required
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Title</label>
+            <input
+              type="text"
+              value={editData.title}
+              onChange={e => onEditChange({ title: e.target.value })}
+              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea
+              value={editData.description}
+              onChange={e => onEditChange({ description: e.target.value })}
+              rows={4}
+              className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Subjects</label>
+            <div className="mt-1">
+              <SubjectSelector
+                selectedSubjects={editData.subjects}
+                onChange={subjects => onEditChange({ subjects })}
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
-              <textarea
-                value={editData.description}
-                onChange={e => onEditChange({ description: e.target.value })}
-                rows={4}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                required
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Languages</label>
+            <div className="mt-1">
+              <LanguageSelector
+                selectedLanguages={editData.languages}
+                onChange={languages => onEditChange({ languages })}
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Subjects</label>
-              <div className="mt-1">
-                <SubjectSelector
-                  selectedSubjects={editData.subjects}
-                  onChange={subjects => onEditChange({ subjects })}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Languages</label>
-              <div className="mt-1">
-                <LanguageSelector
-                  selectedLanguages={editData.languages}
-                  onChange={languages => onEditChange({ languages })}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-              <form onSubmit={handleTagSubmit} className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  placeholder={editingTagIndex !== null ? "Edit tag..." : "Add a tag..."}
-                  className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-                <button
-                  type="submit"
-                  disabled={!tagInput.trim()}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {editingTagIndex !== null ? 'Update' : <Plus className="h-5 w-5" />}
-                </button>
-              </form>
-
-              <div className="flex flex-wrap gap-2">
-                {editData.tags.map((tag, index) => (
-                  <span
-                    key={`${tag}-${index}`}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-sm bg-gray-100 text-gray-800"
-                  >
-                    <Tag className="h-3.5 w-3.5" />
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleTagEdit(index)}
-                      className="hover:text-indigo-600 p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleTagDelete(index)}
-                      className="hover:text-red-600 p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Tags</label>
+            <div className="mt-1">
+              <TagInput
+                tags={editData.tags}
+                onChange={tags => onEditChange({ tags })}
+              />
             </div>
           </div>
         </div>
@@ -160,7 +94,7 @@ export function JobPostContent({ post, isEditing, editData, onEditChange }: JobP
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-      <div className="px-6 py-4">
+      <div className="p-6">
         <div className="prose prose-sm max-w-none">
           <p className="text-gray-700 whitespace-pre-wrap">
             {showFullDescription ? post.description : post.description.slice(0, truncateLength)}
@@ -217,9 +151,9 @@ export function JobPostContent({ post, isEditing, editData, onEditChange }: JobP
               {post.tags.map((tag, index) => (
                 <span
                   key={`${tag.id}-${index}`}
-                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800"
                 >
-                  <Tag className="h-3.5 w-3.5 mr-1" />
+                  <Tag className="h-3.5 w-3.5 text-gray-500" />
                   {tag.name}
                 </span>
               ))}

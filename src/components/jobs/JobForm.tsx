@@ -4,12 +4,15 @@ import { toast } from 'react-hot-toast';
 import { useAuthContext } from '../../context/AuthContext';
 import { SubjectSelector } from '../profile/SubjectSelector';
 import { LanguageSelector } from '../profile/LanguageSelector';
+import { TagInput } from './TagInput';
+import { useJobTags } from '../../hooks/useJobTags';
 import { supabase } from '../../lib/supabase';
 import type { JobFormData } from '../../types/job';
 
 export function JobForm() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
+  const { updateTags } = useJobTags();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<JobFormData>({
     title: '',
@@ -41,19 +44,10 @@ export function JobForm() {
 
       if (jobError) throw jobError;
 
-      // Add tags if any
+      // Add tags
       if (formData.tags.length > 0) {
-        const { error: tagsError } = await supabase
-          .from('job_tags')
-          .insert(
-            formData.tags.map(tag => ({
-              job_id: job.id,
-              name: tag,
-              created_by: user.id
-            }))
-          );
-
-        if (tagsError) throw tagsError;
+        const success = await updateTags(job.id, user.id, formData.tags);
+        if (!success) throw new Error('Failed to add tags');
       }
 
       toast.success('Job post created successfully');
@@ -106,6 +100,16 @@ export function JobForm() {
           <LanguageSelector
             selectedLanguages={formData.languages}
             onChange={languages => setFormData(prev => ({ ...prev, languages }))}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Tags</label>
+        <div className="mt-1">
+          <TagInput
+            tags={formData.tags}
+            onChange={tags => setFormData(prev => ({ ...prev, tags }))}
           />
         </div>
       </div>

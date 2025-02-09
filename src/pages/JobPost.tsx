@@ -24,7 +24,7 @@ export default function JobPost() {
       description: post.description,
       subjects: post.subjects || [],
       languages: post.languages || [],
-      tags: post.tags.map(tag => tag.name)
+      tags: post.tags?.map(tag => tag.name) || []
     });
     setIsEditing(true);
   };
