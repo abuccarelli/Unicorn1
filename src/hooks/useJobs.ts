@@ -19,22 +19,16 @@ export function useJobs() {
       setLoading(true);
       setError(null);
 
-      // First check if we can connect to Supabase
-      const { error: healthCheckError } = await supabase.from('job_posts').select('count');
-      if (healthCheckError) {
-        if (healthCheckError.message?.includes('Failed to fetch')) {
-          throw new Error('Unable to connect to the server. Please check your internet connection.');
-        }
-        throw healthCheckError;
-      }
-
-      // Build the query
       let query = supabase
         .from('job_posts')
         .select(`
           *,
-          tags:job_tags(*),
-          created_by_profile:profiles!job_posts_created_by_fkey (
+          tags:job_tags(
+            id,
+            name,
+            created_by
+          ),
+          created_by_profile:profiles!job_posts_created_by_fkey(
             id,
             "firstName",
             "lastName",
@@ -43,7 +37,7 @@ export function useJobs() {
           comment_count,
           view_count
         `)
-        .order('created_at', { ascending: false });
+        .is('job_tags.deleted_at', null);
 
       // Apply filters
       if (filters.subjects?.length) {
@@ -54,23 +48,29 @@ export function useJobs() {
         query = query.contains('languages', filters.languages);
       }
 
+      // Handle search query
       if (filters.query) {
-        query = query.or(
-          `title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`
-        );
+        const searchTerm = filters.query.toLowerCase();
+        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
       }
+
+      // Add final ordering
+      query = query.order('created_at', { ascending: false });
 
       const { data, error: fetchError } = await query;
 
-      if (fetchError) {
-        // Handle specific error cases
-        if (fetchError.message?.includes('JWT')) {
-          throw new Error('Your session has expired. Please sign in again.');
-        }
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
-      setJobs(data || []);
+      // Process the data to ensure valid tags and remove duplicates
+      const processedJobs = data?.map(job => ({
+        ...job,
+        tags: (job.tags || [])
+          .filter((tag, index, self) => 
+            index === self.findIndex(t => t.name === tag.name)
+          )
+      })) || [];
+
+      setJobs(processedJobs);
       setError(null);
     } catch (err) {
       console.error('Error fetching jobs:', err);

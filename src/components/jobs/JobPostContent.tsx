@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Tag } from 'lucide-react';
 import { SubjectSelector } from '../profile/SubjectSelector';
 import { LanguageSelector } from '../profile/LanguageSelector';
@@ -18,19 +18,31 @@ interface JobPostContentProps {
   onEditChange?: (data: Partial<JobPost>) => void;
 }
 
+// Helper function to capitalize first letter
+const capitalizeFirstLetter = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
 export function JobPostContent({ post, isEditing, editData, onEditChange }: JobPostContentProps) {
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [localTags, setLocalTags] = useState<string[]>([]);
   const truncateLength = 300;
   const needsTruncation = post.description.length > truncateLength;
 
-  // Initialize editData.tags from post.tags if not already set
+  // Initialize localTags when entering edit mode
   useEffect(() => {
-    if (isEditing && editData && onEditChange && (!editData.tags || editData.tags.length === 0) && post.tags?.length > 0) {
-      onEditChange({
-        tags: post.tags.map(tag => tag.name)
-      });
+    if (isEditing && editData) {
+      setLocalTags(editData.tags || []);
     }
-  }, [isEditing, post.tags, editData, onEditChange]);
+  }, [isEditing, editData]);
+
+  const handleTagsChange = (tags: string[]) => {
+    if (onEditChange) {
+      setLocalTags(tags);
+      // Always pass the tags array, even if empty
+      onEditChange({ tags });
+    }
+  };
 
   if (isEditing && editData && onEditChange) {
     return (
@@ -82,8 +94,8 @@ export function JobPostContent({ post, isEditing, editData, onEditChange }: JobP
             <label className="block text-sm font-medium text-gray-700">Tags</label>
             <div className="mt-1">
               <TagInput
-                tags={editData.tags}
-                onChange={tags => onEditChange({ tags })}
+                tags={localTags}
+                onChange={handleTagsChange}
               />
             </div>
           </div>
@@ -154,7 +166,7 @@ export function JobPostContent({ post, isEditing, editData, onEditChange }: JobP
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800"
                 >
                   <Tag className="h-3.5 w-3.5 text-gray-500" />
-                  {tag.name}
+                  {capitalizeFirstLetter(tag.name)}
                 </span>
               ))}
             </div>

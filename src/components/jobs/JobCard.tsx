@@ -8,6 +8,11 @@ interface JobCardProps {
   job: JobPost;
 }
 
+// Helper function to capitalize first letter
+const capitalizeFirstLetter = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
 export function JobCard({ job }: JobCardProps) {
   return (
     <Link
@@ -85,7 +90,7 @@ export function JobCard({ job }: JobCardProps) {
                   className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
                 >
                   <Tag className="h-3 w-3 mr-1" />
-                  {tag.name}
+                  {capitalizeFirstLetter(tag.name)}
                 </span>
               ))}
               {job.tags.length > 3 && (

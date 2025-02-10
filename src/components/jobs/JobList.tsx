@@ -4,9 +4,10 @@ import type { JobPost } from '../../types/job';
 
 interface JobListProps {
   jobs: JobPost[];
+  onRefresh?: () => Promise<void>;
 }
 
-export function JobList({ jobs }: JobListProps) {
+export function JobList({ jobs, onRefresh }: JobListProps) {
   if (jobs.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-lg shadow">

@@ -14,24 +14,31 @@ export default function JobBoard() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const { jobs, loading, error, fetchJobs } = useJobs();
+  const [refreshing, setRefreshing] = useState(false);
 
   // Memoize the fetch function with filters
   const fetchJobsWithFilters = useCallback(() => {
-    fetchJobs({
+    return fetchJobs({
       subjects: selectedSubjects,
       languages: selectedLanguages,
       query: searchQuery
     });
   }, [fetchJobs, selectedSubjects, selectedLanguages, searchQuery]);
 
-  // Initial fetch and filter changes
+  // Fetch jobs when filters change
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchJobsWithFilters();
-    }, 300); // Debounce search/filter changes
-
-    return () => clearTimeout(debounceTimer);
+    fetchJobsWithFilters();
   }, [fetchJobsWithFilters]);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchJobsWithFilters();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -48,11 +55,11 @@ export default function JobBoard() {
             </Link>
           )}
           <button
-            onClick={fetchJobsWithFilters}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            <RefreshCw className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -72,10 +79,7 @@ export default function JobBoard() {
 
           {/* Main Content */}
           <div className="lg:w-3/4">
-            <JobSearch 
-              value={searchQuery}
-              onChange={setSearchQuery}
-            />
+            <JobSearch onSearch={setSearchQuery} />
 
             {loading ? (
               <LoadingSpinner />
@@ -84,7 +88,7 @@ export default function JobBoard() {
                 <div className="text-center">
                   <p className="text-red-600 mb-4">{error}</p>
                   <button
-                    onClick={fetchJobsWithFilters}
+                    onClick={handleRefresh}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     <RefreshCw className="h-5 w-5 mr-2" />

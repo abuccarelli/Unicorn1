@@ -5,14 +5,12 @@ import { useAuthContext } from '../../context/AuthContext';
 import { SubjectSelector } from '../profile/SubjectSelector';
 import { LanguageSelector } from '../profile/LanguageSelector';
 import { TagInput } from './TagInput';
-import { useJobTags } from '../../hooks/useJobTags';
 import { supabase } from '../../lib/supabase';
 import type { JobFormData } from '../../types/job';
 
 export function JobForm() {
   const navigate = useNavigate();
   const { user } = useAuthContext();
-  const { updateTags } = useJobTags();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<JobFormData>({
     title: '',
@@ -44,14 +42,21 @@ export function JobForm() {
 
       if (jobError) throw jobError;
 
-      // Add tags
+      // Add tags if any
       if (formData.tags.length > 0) {
-        const success = await updateTags(job.id, user.id, formData.tags);
-        if (!success) throw new Error('Failed to add tags');
+        const { error: tagError } = await supabase
+          .from('job_tags')
+          .insert(formData.tags.map(tag => ({
+            job_id: job.id,
+            name: tag.toLowerCase(),
+            created_by: user.id
+          })));
+
+        if (tagError) throw tagError;
       }
 
       toast.success('Job post created successfully');
-      navigate(`/jobs/${job.id}`);
+      navigate('/jobs'); // Redirect to job board
     } catch (error) {
       console.error('Error creating job post:', error);
       toast.error('Failed to create job post');
