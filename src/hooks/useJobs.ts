@@ -19,58 +19,52 @@ export function useJobs() {
       setLoading(true);
       setError(null);
 
-      let query = supabase
-        .from('job_posts')
-        .select(`
-          *,
-          tags:job_tags(
-            id,
-            name,
-            created_by
-          ),
-          created_by_profile:profiles!job_posts_created_by_fkey(
-            id,
-            "firstName",
-            "lastName",
-            role
-          ),
-          comment_count,
-          view_count
-        `)
-        .is('job_tags.deleted_at', null);
+      // Call the search function
+      const { data, error: searchError } = await supabase
+        .rpc('execute_job_search', {
+          search_term: filters.query || null
+        });
 
-      // Apply filters
+      if (searchError) throw searchError;
+
+      // Apply client-side filters for subjects and languages
+      let filteredJobs = data || [];
+
       if (filters.subjects?.length) {
-        query = query.contains('subjects', filters.subjects);
+        filteredJobs = filteredJobs.filter(job => 
+          job.subjects?.some(subject => filters.subjects?.includes(subject))
+        );
       }
 
       if (filters.languages?.length) {
-        query = query.contains('languages', filters.languages);
+        filteredJobs = filteredJobs.filter(job =>
+          job.languages?.some(language => filters.languages?.includes(language))
+        );
       }
 
-      // Handle search query
-      if (filters.query) {
-        const searchTerm = filters.query.toLowerCase();
-        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
-      }
+      // Transform the data to match JobPost type
+      const transformedJobs = filteredJobs.map((job: any) => ({
+        id: job.id,
+        title: job.title,
+        description: job.description,
+        subjects: job.subjects,
+        languages: job.languages,
+        status: job.status,
+        created_by: job.created_by,
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        view_count: job.view_count,
+        comment_count: job.comment_count,
+        tags: job.tags || [],
+        created_by_profile: {
+          id: job.profile_id,
+          firstName: job.firstName,
+          lastName: job.lastName,
+          role: job.role
+        }
+      }));
 
-      // Add final ordering
-      query = query.order('created_at', { ascending: false });
-
-      const { data, error: fetchError } = await query;
-
-      if (fetchError) throw fetchError;
-
-      // Process the data to ensure valid tags and remove duplicates
-      const processedJobs = data?.map(job => ({
-        ...job,
-        tags: (job.tags || [])
-          .filter((tag, index, self) => 
-            index === self.findIndex(t => t.name === tag.name)
-          )
-      })) || [];
-
-      setJobs(processedJobs);
+      setJobs(transformedJobs);
       setError(null);
     } catch (err) {
       console.error('Error fetching jobs:', err);

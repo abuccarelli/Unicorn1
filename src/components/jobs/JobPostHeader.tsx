@@ -1,8 +1,9 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, MessageSquare, Eye, Edit, X, Check } from 'lucide-react';
+import React, { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Clock, MessageSquare, Eye, Edit, X, Check, XCircle } from 'lucide-react';
 import { DateTime } from 'luxon';
+import { toast } from 'react-hot-toast';
 import { useAuthContext } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import type { JobPost } from '../../types/job';
 
 interface JobPostHeaderProps {
@@ -17,6 +18,21 @@ export function JobPostHeader({ post, onEdit, isEditing, onSave, onCancel }: Job
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const isOwner = user?.id === post.created_by;
+
+  const handleClose = async () => {
+    try {
+      const { error } = await supabase.rpc('close_job_post', { post_id: post.id });
+      
+      if (error) throw error;
+      
+      toast.success('Job post closed successfully');
+      // Refresh the page to show updated status
+      window.location.reload();
+    } catch (err) {
+      console.error('Error closing job post:', err);
+      toast.error('Failed to close job post');
+    }
+  };
 
   return (
     <>
@@ -40,14 +56,23 @@ export function JobPostHeader({ post, onEdit, isEditing, onSave, onCancel }: Job
             </div>
             
             <div className="flex items-center space-x-2">
-              {isOwner && !isEditing && (
-                <button
-                  onClick={onEdit}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </button>
+              {isOwner && !isEditing && post.status === 'open' && (
+                <>
+                  <button
+                    onClick={onEdit}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleClose}
+                    className="inline-flex items-center px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Close Post
+                  </button>
+                </>
               )}
               {isEditing && (
                 <>
